@@ -4,6 +4,7 @@ extends StaticBody3D
 @onready var label: Label3D = $Label3D
 
 var _hits := 0
+var _damage_taken := 0
 var _flash_time := 0.0
 var _base_material: StandardMaterial3D
 var _hit_material: StandardMaterial3D
@@ -27,12 +28,13 @@ func _process(delta: float) -> void:
 		mesh.material_override = _base_material
 
 
-func take_hit(_impact_speed: float) -> void:
+func take_hit(damage: int) -> void:
 	_hits += 1
+	_damage_taken += damage
 	_flash_time = 0.18
 	_update_label()
 	mesh.material_override = _hit_material
 
 
 func _update_label() -> void:
-	label.text = "Target\nHits: %d" % _hits
+	label.text = "Target\nHits: %d\nDamage: %d" % [_hits, _damage_taken]

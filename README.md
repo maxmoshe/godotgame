@@ -39,15 +39,16 @@ tools/install-godot-wsl.sh
 
 ## 3D Sling Test
 
-The combat test now opens in a small Bethlehem-style Judean hill-country pasture with mostly green grass, irregular brown soil patches, uneven hills, stone terraces, olives, figs, sage scrub, wildflowers, a sheepfold, sheep, rocks, and sling targets placed across the slopes.
-The ground uses a terrain shader that blends downloaded rocky-grass and gravel textures directly on the terrain surface. Larger dirt depressions are also built into the terrain height, keeping color and relief aligned without slow load-time texture generation. Limestone pebbles are varied flattened faceted 3D meshes.
-The terrain shader currently uses downloaded 1K rocky grass and gravel diffuse maps plus PNG displacement maps for bump detail. The downloaded EXR normal/roughness maps are present but not wired because the WSL startup check could not load them.
-Generated scenery uses reusable decoration exclusion zones, so stones, grass, and future scatter props can avoid paths or other reserved spaces.
+The combat test is currently stripped back to a Bethlehem-style Judean hill-country terrain, a dirt path, sling targets, and scattered stones. Earlier placeholder sheep, grass tufts, trees, terraces, blocks, clouds, and other props were removed until better art is ready.
+The ground uses a terrain shader that blends downloaded rocky-grass and gravel textures directly on the terrain surface. Larger dirt depressions are also built into the terrain height, keeping color and relief aligned without slow load-time texture generation.
+Pebbles and larger rocks use reusable scatter logic with path exclusion zones, so stones and future props can avoid paths or other reserved spaces. The stones use the marble diffuse and displacement textures from `assets/textures/terrain/marble`; the EXR normal/roughness maps are present but not wired because the WSL startup check could not load EXR resources.
 
 - `WASD`: move
+- `Space`: jump
 - Mouse: first-person look, clamped only near straight down at the ground and straight up at the sky
 - Right mouse: aim without zooming the camera
-- Hold and release left mouse: charge and throw a sling stone
+- Hold left mouse: charge the sling, slowing movement and disabling sprint
+- Release left mouse: throw a sling stone
 - Impacts on targets or terrain spawn a bright stone-spark burst and fading surface heat mark
 - `Esc`: return to the campaign map
 
