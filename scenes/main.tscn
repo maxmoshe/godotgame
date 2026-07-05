@@ -1,8 +1,9 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/campaign_map.gd" id="2_map"]
 [ext_resource type="Script" path="res://scripts/player.gd" id="3_player"]
+[ext_resource type="Script" path="res://scripts/inventory_panel.gd" id="4_inventory"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 15.0
@@ -60,7 +61,7 @@ offset_right = 760.0
 offset_bottom = 84.0
 theme_override_colors/font_color = Color(0.82, 0.74, 0.58, 1)
 theme_override_font_sizes/font_size = 17
-text = "Click a city or NPC party to travel there. Hold left mouse to follow the pointer. WASD / arrows interrupt travel."
+text = "Click a city or NPC party to travel there. Hold left mouse to follow the pointer. Press I for inventory."
 
 [node name="DialoguePanel" type="Panel" parent="HUD"]
 visible = false
@@ -85,11 +86,30 @@ layout_mode = 0
 offset_left = 24.0
 offset_top = 64.0
 offset_right = 608.0
-offset_bottom = 182.0
+offset_bottom = 178.0
 theme_override_colors/font_color = Color(0.890196, 0.819608, 0.65098, 1)
 theme_override_font_sizes/font_size = 19
 text = "Dialogue"
 autowrap_mode = 3
+
+[node name="TradeButton" type="Button" parent="HUD/DialoguePanel"]
+visible = false
+layout_mode = 0
+offset_left = 250.0
+offset_top = 208.0
+offset_right = 382.0
+offset_bottom = 248.0
+theme_override_font_sizes/font_size = 18
+text = "Trade"
+
+[node name="ContinueButton" type="Button" parent="HUD/DialoguePanel"]
+layout_mode = 0
+offset_left = 320.0
+offset_top = 208.0
+offset_right = 456.0
+offset_bottom = 248.0
+theme_override_font_sizes/font_size = 18
+text = "Continue"
 
 [node name="LeaveButton" type="Button" parent="HUD/DialoguePanel"]
 layout_mode = 0
@@ -99,3 +119,24 @@ offset_right = 608.0
 offset_bottom = 248.0
 theme_override_font_sizes/font_size = 18
 text = "Leave"
+
+[node name="InventoryPanel" type="Panel" parent="HUD"]
+visible = false
+offset_left = 842.0
+offset_top = 80.0
+offset_right = 1248.0
+offset_bottom = 430.0
+script = ExtResource("4_inventory")
+title_text = "Inventory"
+seed_profile = "player"
+
+[node name="MarketPanel" type="Panel" parent="HUD"]
+visible = false
+offset_left = 32.0
+offset_top = 80.0
+offset_right = 438.0
+offset_bottom = 430.0
+script = ExtResource("4_inventory")
+weight_capacity = 120.0
+title_text = "Town Market"
+seed_profile = "market"
