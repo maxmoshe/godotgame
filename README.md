@@ -39,7 +39,10 @@ tools/install-godot-wsl.sh
 
 ## 3D Sling Test
 
-The combat test now opens in a small Judean hill-country pasture with uneven hills, stone terraces, an olive grove, a sheepfold, sheep, rocks, and sling targets placed across the slopes.
+The combat test now opens in a small Bethlehem-style Judean hill-country pasture with mostly green grass, irregular brown soil patches, uneven hills, stone terraces, olives, figs, sage scrub, wildflowers, a sheepfold, sheep, rocks, and sling targets placed across the slopes.
+The ground uses a terrain shader that blends downloaded rocky-grass and gravel textures directly on the terrain surface. Larger dirt depressions are also built into the terrain height, keeping color and relief aligned without slow load-time texture generation. Limestone pebbles are varied flattened faceted 3D meshes.
+The terrain shader currently uses downloaded 1K rocky grass and gravel diffuse maps plus PNG displacement maps for bump detail. The downloaded EXR normal/roughness maps are present but not wired because the WSL startup check could not load them.
+Generated scenery uses reusable decoration exclusion zones, so stones, grass, and future scatter props can avoid paths or other reserved spaces.
 
 - `WASD`: move
 - Mouse: first-person look, clamped only near straight down at the ground and straight up at the sky

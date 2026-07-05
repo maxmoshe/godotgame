@@ -2,6 +2,10 @@ extends Node3D
 
 const CombatPlayer := preload("res://scripts/combat_player.gd")
 const TargetDummy := preload("res://scripts/target_dummy.gd")
+const TerrainGrassAlbedo := preload("res://assets/textures/terrain/rocky_grass/rocky_terrain_02_diff_1k.jpg")
+const TerrainGrassHeight := preload("res://assets/textures/terrain/rocky_grass/rocky_terrain_02_disp_1k.png")
+const TerrainDirtAlbedo := preload("res://assets/textures/terrain/rocky_gravel/gravelly_sand_diff_1k.jpg")
+const TerrainDirtHeight := preload("res://assets/textures/terrain/rocky_gravel/gravelly_sand_disp_1k.png")
 
 const TERRAIN_SIZE := 88.0
 const TERRAIN_STEPS := 72
@@ -9,18 +13,25 @@ const TERRAIN_HALF := TERRAIN_SIZE * 0.5
 const TERRAIN_FALL_LIMIT := -5.0
 const PLAYER_SPAWN := Vector3(0.0, 0.0, 8.0)
 const PLAYER_FOOT_CLEARANCE := 0.12
-const TERRAIN_COLOR_LOW := Color("#8f7747")
-const TERRAIN_COLOR_HIGH := Color("#b99f5e")
+const TERRAIN_COLOR_LOW := Color("#566f38")
+const TERRAIN_COLOR_HIGH := Color("#8a9a59")
 const PATH_COLOR := Color("#c0a56d")
-const STONE_COLOR := Color("#776f60")
-const DRY_GRASS_COLOR := Color("#c5ad6e")
-const OLIVE_LEAF_COLOR := Color("#5f7147")
+const STONE_COLOR := Color("#8f8a75")
+const LIMESTONE_COLOR := Color("#d3c9aa")
+const DRY_GRASS_COLOR := Color("#7f9248")
+const OLIVE_LEAF_COLOR := Color("#61774f")
 const OLIVE_TRUNK_COLOR := Color("#6c4f36")
+const SAGE_COLOR := Color("#7e8b61")
+const FLOWER_PURPLE := Color("#8f6eb5")
+const FLOWER_YELLOW := Color("#d8bc50")
+const FLOWER_WHITE := Color("#e9e0c8")
 
 @onready var player: CharacterBody3D = $Player
 @onready var aim_label: Label = $HUD/AimLabel
 @onready var charge_bar: ProgressBar = $HUD/ChargeBar
 @onready var reticle: Label = $HUD/Reticle
+
+var _decoration_exclusions: Array[Dictionary] = []
 
 
 func _ready() -> void:
@@ -46,16 +57,23 @@ func _process(_delta: float) -> void:
 func _setup_environment() -> void:
 	_add_world_environment()
 	_add_sun()
+	_add_clouds()
 	_add_terrain()
 	_add_ground_visibility_underlay()
 	_add_terrace_wall(Vector3(-17.0, _terrain_height(-17.0, -10.0) + 0.1, -10.0), 20.0, 0.0)
 	_add_terrace_wall(Vector3(11.0, _terrain_height(11.0, -17.0) + 0.1, -17.0), 23.0, -12.0)
 	_add_terrace_wall(Vector3(-4.0, _terrain_height(-4.0, 8.0) + 0.1, 8.0), 17.0, 8.0)
+	_add_terrace_wall(Vector3(24.0, _terrain_height(24.0, 3.0) + 0.1, 3.0), 15.0, 18.0)
+	_add_terrace_wall(Vector3(-28.0, _terrain_height(-28.0, -23.0) + 0.1, -23.0), 18.0, -15.0)
 	_add_sheepfold(Vector3(-24.0, _terrain_height(-24.0, 7.5), 7.5))
 	_add_path()
 	_add_olive_grove()
+	_add_bethlehem_vegetation()
+	_add_wildflowers()
 	_add_grass_tufts()
+	_add_limestone_pebbles()
 	_add_scattered_rocks()
+	_add_shepherd_lookout(Vector3(14.0, _terrain_height(14.0, 18.0), 18.0))
 	_add_sheep(Vector3(-27.0, _terrain_height(-27.0, 10.0), 10.0), 30.0)
 	_add_sheep(Vector3(-21.0, _terrain_height(-21.0, 5.0), 5.0), -8.0)
 	_add_sheep(Vector3(-18.0, _terrain_height(-18.0, 12.5), 12.5), 18.0)
@@ -69,13 +87,13 @@ func _add_world_environment() -> void:
 	world.name = "HillCountryWorld"
 	var environment := Environment.new()
 	environment.background_mode = Environment.BG_COLOR
-	environment.background_color = Color("#72b9ed")
+	environment.background_color = Color("#64b7f0")
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	environment.ambient_light_color = Color("#d9e8ee")
-	environment.ambient_light_energy = 0.62
+	environment.ambient_light_color = Color("#e8e0c5")
+	environment.ambient_light_energy = 0.58
 	environment.fog_enabled = true
-	environment.fog_light_color = Color("#b9d7e8")
-	environment.fog_density = 0.006
+	environment.fog_light_color = Color("#c2d8e6")
+	environment.fog_density = 0.0045
 	world.environment = environment
 	add_child(world)
 
@@ -83,10 +101,40 @@ func _add_world_environment() -> void:
 func _add_sun() -> void:
 	var light := DirectionalLight3D.new()
 	light.name = "Sun"
-	light.rotation_degrees = Vector3(-42.0, 31.0, 0.0)
-	light.light_energy = 2.6
+	light.rotation_degrees = Vector3(-38.0, 38.0, 0.0)
+	light.light_energy = 2.9
 	light.shadow_enabled = true
 	add_child(light)
+
+	var fill := DirectionalLight3D.new()
+	fill.name = "SoftSkyFill"
+	fill.rotation_degrees = Vector3(-68.0, -128.0, 0.0)
+	fill.light_color = Color("#9ec7ef")
+	fill.light_energy = 0.32
+	add_child(fill)
+
+
+func _add_clouds() -> void:
+	var cloud_clusters := [
+		[Vector3(-24.0, 32.0, -10.0), 1.0],
+		[Vector3(18.0, 34.0, -18.0), 0.85],
+		[Vector3(34.0, 30.0, 18.0), 0.75],
+		[Vector3(-8.0, 36.0, 26.0), 0.65],
+	]
+	for cluster in cloud_clusters:
+		var center: Vector3 = cluster[0]
+		var scale_factor: float = cluster[1]
+		for index in range(4):
+			var cloud := MeshInstance3D.new()
+			cloud.name = "SoftCloud"
+			var mesh := SphereMesh.new()
+			mesh.radius = 1.0
+			mesh.height = 0.7
+			cloud.mesh = mesh
+			cloud.position = center + Vector3(float(index - 1) * 1.35 * scale_factor, sin(float(index)) * 0.24, cos(float(index)) * 0.7)
+			cloud.scale = Vector3(2.6, 0.38, 1.05) * scale_factor
+			cloud.material_override = _make_material(Color("#eef3eb"), 1.0, 0.0)
+			add_child(cloud)
 
 
 func _add_terrain() -> void:
@@ -111,7 +159,7 @@ func _add_ground_visibility_underlay() -> void:
 	mesh.size = Vector2(TERRAIN_SIZE, TERRAIN_SIZE)
 	underlay.mesh = mesh
 	underlay.position.y = -0.48
-	underlay.material_override = _make_material(Color("#7f6d43"), 1.0, 0.0)
+	underlay.material_override = _make_material(Color("#596f3c"), 1.0, 0.0)
 	add_child(underlay)
 
 
@@ -151,6 +199,7 @@ func _build_terrain_mesh() -> ArrayMesh:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
 	var step_size := TERRAIN_SIZE / float(TERRAIN_STEPS)
 
@@ -163,6 +212,7 @@ func _build_terrain_mesh() -> ArrayMesh:
 			normals.append(_terrain_normal(x, z))
 			var color_blend := clampf((y + 0.8) / 3.7, 0.0, 1.0)
 			colors.append(TERRAIN_COLOR_LOW.lerp(TERRAIN_COLOR_HIGH, color_blend))
+			uvs.append(Vector2((x + TERRAIN_HALF) / TERRAIN_SIZE, (z + TERRAIN_HALF) / TERRAIN_SIZE))
 
 	for z_index in range(TERRAIN_STEPS):
 		for x_index in range(TERRAIN_STEPS):
@@ -178,6 +228,7 @@ func _build_terrain_mesh() -> ArrayMesh:
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
 	arrays[Mesh.ARRAY_INDEX] = indices
 
 	var mesh := ArrayMesh.new()
@@ -192,7 +243,51 @@ func _terrain_height(x: float, z: float) -> float:
 	var shallow_wadi := -0.85 * exp(-(pow((x - 1.5) / 9.0, 2.0) + pow((z + 1.0) / 32.0, 2.0)))
 	var ripple := 0.22 * sin(x * 0.22) + 0.14 * cos((x + z) * 0.17)
 	var spawn_flatten := 0.45 * exp(-(pow(x / 10.0, 2.0) + pow((z - 8.0) / 8.0, 2.0)))
-	return maxf(-0.35, north_ridge + west_swell + east_swell + shallow_wadi + ripple - spawn_flatten)
+	var base_height := maxf(-0.35, north_ridge + west_swell + east_swell + shallow_wadi + ripple - spawn_flatten)
+	return base_height + _terrain_surface_relief(x, z)
+
+
+func _terrain_surface_relief(x: float, z: float) -> float:
+	var uv := _terrain_uv(x, z)
+	var dirt := _terrain_dirt_mask_at(uv)
+	var rough_grass := (_value_noise(uv * 42.0 + Vector2(3.0, -7.0)) - 0.5) * 0.035
+	return -dirt * 0.09 + rough_grass * (1.0 - dirt)
+
+
+func _terrain_uv(x: float, z: float) -> Vector2:
+	return Vector2((x + TERRAIN_HALF) / TERRAIN_SIZE, (z + TERRAIN_HALF) / TERRAIN_SIZE)
+
+
+func _terrain_dirt_mask_at(uv: Vector2) -> float:
+	var dirt_mask := 0.0
+	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.25, 0.50), Vector2(0.12, 0.08), 0.95))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.70, 0.24), Vector2(0.15, 0.10), 0.90))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.28, 0.72), Vector2(0.09, 0.12), 0.82))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.47, 0.22), Vector2(0.12, 0.08), 0.72))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.60, 0.63), Vector2(0.10, 0.13), 0.78))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.80, 0.55), Vector2(0.08, 0.11), 0.62))
+	return smoothstep(0.08, 0.85, dirt_mask)
+
+
+func _terrain_patch(uv: Vector2, center: Vector2, radius: Vector2, strength: float) -> float:
+	var offset := Vector2((uv.x - center.x) / radius.x, (uv.y - center.y) / radius.y)
+	var edge := _value_noise(uv * 24.0 + center * 17.0) * 0.22
+	return (1.0 - smoothstep(0.38 + edge, 1.0 + edge, offset.length())) * strength
+
+
+func _value_noise(point: Vector2) -> float:
+	var cell := point.floor()
+	var fraction := point - cell
+	var u := fraction * fraction * (Vector2.ONE * 3.0 - fraction * 2.0)
+	var a := _hash21(cell)
+	var b := _hash21(cell + Vector2(1.0, 0.0))
+	var c := _hash21(cell + Vector2(0.0, 1.0))
+	var d := _hash21(cell + Vector2(1.0, 1.0))
+	return lerpf(lerpf(a, b, u.x), lerpf(c, d, u.x), u.y)
+
+
+func _hash21(point: Vector2) -> float:
+	return fmod(absf(sin(point.dot(Vector2(127.1, 311.7))) * 43758.5453123), 1.0)
 
 
 func _terrain_normal(x: float, z: float) -> Vector3:
@@ -214,7 +309,9 @@ func _add_path() -> void:
 		Vector3(31.0, 0.0, -29.0),
 	]
 	var sampled_points := _sample_path_points(path_points, 1.35)
-	_add_path_ribbon(sampled_points, 2.4)
+	var path_width := 2.4
+	_register_decoration_exclusion_corridor(sampled_points, path_width * 0.5 + 0.45)
+	_add_path_ribbon(sampled_points, path_width)
 
 
 func _sample_path_points(path_points: Array, spacing: float) -> Array[Vector3]:
@@ -281,6 +378,50 @@ func _add_path_ribbon(path_points: Array[Vector3], width: float) -> void:
 	mesh_instance.mesh = mesh
 	mesh_instance.material_override = _make_material(PATH_COLOR, 0.98, 0.0, true, true)
 	add_child(mesh_instance)
+
+
+func _register_decoration_exclusion_corridor(points: Array[Vector3], radius: float) -> void:
+	var path_points: Array[Vector2] = []
+	for point in points:
+		path_points.append(Vector2(point.x, point.z))
+	_decoration_exclusions.append({
+		"type": "corridor",
+		"points": path_points,
+		"radius": radius,
+	})
+
+
+func _register_decoration_exclusion_circle(center: Vector3, radius: float) -> void:
+	_decoration_exclusions.append({
+		"type": "circle",
+		"center": Vector2(center.x, center.z),
+		"radius": radius,
+	})
+
+
+func _is_decoration_excluded(position: Vector3, object_radius := 0.0) -> bool:
+	var point := Vector2(position.x, position.z)
+	for exclusion in _decoration_exclusions:
+		var radius := float(exclusion["radius"]) + object_radius
+		match String(exclusion["type"]):
+			"circle":
+				if point.distance_to(exclusion["center"]) <= radius:
+					return true
+			"corridor":
+				var path_points: Array[Vector2] = exclusion["points"]
+				for index in range(path_points.size() - 1):
+					if _distance_to_segment_2d(point, path_points[index], path_points[index + 1]) <= radius:
+						return true
+	return false
+
+
+func _distance_to_segment_2d(point: Vector2, start: Vector2, finish: Vector2) -> float:
+	var segment := finish - start
+	var length_squared := segment.length_squared()
+	if length_squared <= 0.0001:
+		return point.distance_to(start)
+	var t := clampf((point - start).dot(segment) / length_squared, 0.0, 1.0)
+	return point.distance_to(start + segment * t)
 
 
 func _add_terrace_wall(position: Vector3, length: float, yaw_degrees: float) -> void:
@@ -357,15 +498,255 @@ func _add_olive_tree(position: Vector3) -> void:
 		tree.add_child(canopy)
 
 
+func _add_bethlehem_vegetation() -> void:
+	var fig_trees := [
+		Vector3(-11.0, 0.0, 18.0),
+		Vector3(-4.0, 0.0, 23.0),
+		Vector3(10.0, 0.0, 15.0),
+		Vector3(33.0, 0.0, 13.0),
+	]
+	for position in fig_trees:
+		position.y = _terrain_height(position.x, position.z)
+		_add_fig_tree(position)
+
+	for index in range(38):
+		var angle := float(index) * 1.917
+		var radius := 10.0 + fmod(float(index) * 5.7, 32.0)
+		var x := cos(angle) * radius + sin(float(index) * 0.31) * 2.0
+		var z := sin(angle) * radius + cos(float(index) * 0.52) * 2.0
+		if Vector2(x, z).distance_to(Vector2(PLAYER_SPAWN.x, PLAYER_SPAWN.z)) < 5.5:
+			continue
+		var scrub_radius := 0.65 + fmod(float(index), 4.0) * 0.14
+		var scrub_position := Vector3(x, _terrain_height(x, z), z)
+		if _is_decoration_excluded(scrub_position, scrub_radius):
+			continue
+		_add_scrub(scrub_position, scrub_radius)
+
+
+func _add_fig_tree(position: Vector3) -> void:
+	var tree := Node3D.new()
+	tree.name = "FigTree"
+	tree.position = position
+	add_child(tree)
+
+	var trunk := MeshInstance3D.new()
+	var trunk_mesh := CylinderMesh.new()
+	trunk_mesh.top_radius = 0.22
+	trunk_mesh.bottom_radius = 0.34
+	trunk_mesh.height = 1.75
+	trunk.mesh = trunk_mesh
+	trunk.position.y = 0.88
+	trunk.rotation_degrees.z = -7.0
+	trunk.material_override = _make_material(Color("#735538"), 0.9, 0.0)
+	tree.add_child(trunk)
+
+	var leaf_colors := [Color("#496b42"), Color("#567b4b"), Color("#6c8b58")]
+	var canopy_offsets := [
+		Vector3(0.0, 1.95, 0.0),
+		Vector3(0.75, 1.75, 0.14),
+		Vector3(-0.65, 1.7, -0.12),
+		Vector3(0.1, 1.55, -0.72),
+	]
+	for index in range(canopy_offsets.size()):
+		var canopy := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = 1.0
+		mesh.height = 0.9
+		canopy.mesh = mesh
+		canopy.position = canopy_offsets[index]
+		canopy.scale = Vector3(1.25, 0.62, 1.05)
+		canopy.material_override = _make_material(leaf_colors[index % leaf_colors.size()], 0.95, 0.0)
+		tree.add_child(canopy)
+
+
+func _add_scrub(position: Vector3, radius: float) -> void:
+	var scrub := Node3D.new()
+	scrub.name = "SageScrub"
+	scrub.position = position + Vector3(0.0, 0.18, 0.0)
+	add_child(scrub)
+
+	for index in range(3):
+		var clump := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = radius
+		mesh.height = radius * 0.65
+		clump.mesh = mesh
+		var angle := float(index) * TAU / 3.0
+		clump.position = Vector3(cos(angle) * radius * 0.28, 0.0, sin(angle) * radius * 0.28)
+		clump.scale = Vector3(1.0, 0.35, 0.78)
+		clump.material_override = _make_material(SAGE_COLOR.lightened(float(index) * 0.035), 1.0, 0.0)
+		scrub.add_child(clump)
+
+
+func _add_wildflowers() -> void:
+	for index in range(44):
+		var angle := float(index) * 2.141
+		var radius := 6.0 + fmod(float(index) * 3.8, 34.0)
+		var x := cos(angle) * radius + sin(float(index) * 0.67) * 3.5
+		var z := sin(angle) * radius + cos(float(index) * 0.29) * 3.5
+		if z < -33.0:
+			continue
+		var color := FLOWER_PURPLE
+		if index % 5 == 0:
+			color = FLOWER_YELLOW
+		elif index % 3 == 0:
+			color = FLOWER_WHITE
+		var flower_position := Vector3(x, _terrain_height(x, z), z)
+		if _is_decoration_excluded(flower_position, 0.35):
+			continue
+		_add_flower_cluster(flower_position, color)
+
+
+func _add_limestone_pebbles() -> void:
+	for index in range(86):
+		var angle := float(index) * 2.371
+		var radius := 4.0 + fmod(float(index) * 5.23, 40.0)
+		var x := cos(angle) * radius + sin(float(index) * 0.55) * 2.8
+		var z := sin(angle) * radius + cos(float(index) * 0.37) * 2.8
+		if Vector2(x, z).distance_to(Vector2(PLAYER_SPAWN.x, PLAYER_SPAWN.z)) < 3.5:
+			continue
+		var size_roll := pow(_deterministic_unit(index, 222), 1.9)
+		var pebble_radius := 0.16 + size_roll * 0.86
+		var pebble_position := Vector3(x, _terrain_height(x, z), z)
+		if _is_decoration_excluded(pebble_position, pebble_radius * 1.8):
+			continue
+		_add_pebble(pebble_position, pebble_radius, index)
+
+
+func _add_pebble(position: Vector3, radius: float, index: int) -> void:
+	var pebble := MeshInstance3D.new()
+	pebble.name = "LimestonePebble"
+	pebble.mesh = _make_pebble_mesh(radius, index)
+	pebble.position = position + Vector3(0.0, 0.035 + radius * 0.025, 0.0)
+	pebble.rotation_degrees = Vector3(0.0, fmod(float(index) * 43.0, 360.0), 0.0)
+	var color := LIMESTONE_COLOR.lightened(fmod(float(index), 3.0) * 0.035)
+	if index % 7 == 0:
+		color = color.darkened(0.08)
+	pebble.material_override = _make_material(color, 0.96, 0.0)
+	add_child(pebble)
+
+
+func _make_pebble_mesh(radius: float, seed: int) -> ArrayMesh:
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	var segments := 8
+	var height := radius * (0.62 + _deterministic_unit(seed, 91) * 0.42) / 3.0
+	var squash_x := 1.15 + _deterministic_unit(seed, 12) * 0.65
+	var squash_z := 0.78 + _deterministic_unit(seed, 41) * 0.42
+	var bottom: Array[Vector3] = []
+	var middle: Array[Vector3] = []
+	var top: Array[Vector3] = []
+
+	for segment in range(segments):
+		var angle := float(segment) * TAU / float(segments)
+		var ring_noise := 0.78 + _deterministic_unit(seed, segment) * 0.38
+		var top_noise := 0.52 + _deterministic_unit(seed + 13, segment) * 0.28
+		var direction := Vector3(cos(angle) * squash_x, 0.0, sin(angle) * squash_z)
+		bottom.append(direction * radius * ring_noise)
+		middle.append(direction * radius * ring_noise * 0.86 + Vector3(0.0, height * (0.38 + _deterministic_unit(seed, segment + 30) * 0.14), 0.0))
+		top.append(direction * radius * top_noise + Vector3(0.0, height * (0.84 + _deterministic_unit(seed, segment + 60) * 0.18), 0.0))
+
+	var bottom_center := Vector3.ZERO
+	var top_center := Vector3(0.0, height * (1.02 + _deterministic_unit(seed, 99) * 0.16), 0.0)
+	for segment in range(segments):
+		var next := (segment + 1) % segments
+		_append_faceted_triangle(vertices, normals, indices, bottom[segment], bottom[next], middle[segment])
+		_append_faceted_triangle(vertices, normals, indices, middle[segment], bottom[next], middle[next])
+		_append_faceted_triangle(vertices, normals, indices, middle[segment], middle[next], top[segment])
+		_append_faceted_triangle(vertices, normals, indices, top[segment], middle[next], top[next])
+		_append_faceted_triangle(vertices, normals, indices, top_center, top[segment], top[next])
+		_append_faceted_triangle(vertices, normals, indices, bottom_center, bottom[next], bottom[segment])
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _append_faceted_triangle(vertices: PackedVector3Array, normals: PackedVector3Array, indices: PackedInt32Array, a: Vector3, b: Vector3, c: Vector3) -> void:
+	var normal := (b - a).cross(c - a).normalized()
+	if normal == Vector3.ZERO:
+		normal = Vector3.UP
+	var start_index := vertices.size()
+	vertices.append(a)
+	vertices.append(b)
+	vertices.append(c)
+	normals.append(normal)
+	normals.append(normal)
+	normals.append(normal)
+	indices.append(start_index)
+	indices.append(start_index + 1)
+	indices.append(start_index + 2)
+
+
+func _deterministic_unit(seed: int, salt: int) -> float:
+	return fmod(absf(sin(float(seed) * 12.9898 + float(salt) * 78.233) * 43758.5453), 1.0)
+
+
+func _add_flower_cluster(position: Vector3, color: Color) -> void:
+	var cluster := Node3D.new()
+	cluster.name = "WildflowerCluster"
+	cluster.position = position + Vector3(0.0, 0.08, 0.0)
+	add_child(cluster)
+
+	for index in range(5):
+		var flower := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = 0.055
+		mesh.height = 0.075
+		flower.mesh = mesh
+		var angle := float(index) * TAU / 5.0
+		flower.position = Vector3(cos(angle) * 0.18, 0.0, sin(angle) * 0.18)
+		flower.material_override = _make_material(color.lightened(float(index % 2) * 0.05), 0.85, 0.0)
+		cluster.add_child(flower)
+
+
+func _add_shepherd_lookout(position: Vector3) -> void:
+	var lookout := Node3D.new()
+	lookout.name = "ShepherdLookout"
+	lookout.position = position
+	add_child(lookout)
+
+	for layer in range(3):
+		var blocks := 8 - layer
+		for index in range(blocks):
+			var angle := float(index) * TAU / float(blocks)
+			var radius := 1.35 - float(layer) * 0.22
+			var local_position := Vector3(cos(angle) * radius, 0.18 + float(layer) * 0.38, sin(angle) * radius)
+			var size := Vector3(0.62, 0.34, 0.46)
+			var block := _add_static_box(lookout, "LookoutStone", local_position, size, STONE_COLOR.lightened(0.07 + float(layer) * 0.03), 0.98)
+			block.rotation_degrees.y = rad_to_deg(angle)
+
+	var cap := MeshInstance3D.new()
+	cap.name = "LookoutFlatTop"
+	var cap_mesh := CylinderMesh.new()
+	cap_mesh.top_radius = 1.05
+	cap_mesh.bottom_radius = 1.15
+	cap_mesh.height = 0.18
+	cap_mesh.radial_segments = 18
+	cap.mesh = cap_mesh
+	cap.position.y = 1.25
+	cap.material_override = _make_material(STONE_COLOR.lightened(0.12), 0.98, 0.0)
+	lookout.add_child(cap)
+
+
 func _add_grass_tufts() -> void:
-	for index in range(75):
+	for index in range(125):
 		var angle := float(index) * 2.39996
 		var radius := 7.0 + fmod(float(index) * 4.65, 34.0)
 		var x := cos(angle) * radius + sin(float(index) * 0.74) * 3.0
 		var z := sin(angle) * radius + cos(float(index) * 0.41) * 3.0
 		if absf(x) < 3.0 and z > 4.0 and z < 12.0:
 			continue
-		_add_grass_tuft(Vector3(x, _terrain_height(x, z), z), 0.65 + fmod(float(index), 5.0) * 0.08)
+		var tuft_position := Vector3(x, _terrain_height(x, z), z)
+		if _is_decoration_excluded(tuft_position, 0.3):
+			continue
+		_add_grass_tuft(tuft_position, 0.65 + fmod(float(index), 5.0) * 0.08)
 
 
 func _add_grass_tuft(position: Vector3, height: float) -> void:
@@ -399,7 +780,10 @@ func _add_scattered_rocks() -> void:
 	for index in range(rock_positions.size()):
 		var rock_position: Vector3 = rock_positions[index]
 		rock_position.y = _terrain_height(rock_position.x, rock_position.z) + 0.18
-		_add_rock(rock_position, 0.65 + float(index % 4) * 0.16)
+		var rock_radius := 0.65 + float(index % 4) * 0.16
+		if _is_decoration_excluded(rock_position, rock_radius * 1.35):
+			continue
+		_add_rock(rock_position, rock_radius)
 
 
 func _add_rock(position: Vector3, radius: float) -> void:
@@ -517,9 +901,84 @@ func _add_static_box(parent: Node, node_name: String, position: Vector3, size: V
 	return body
 
 
-func _make_terrain_material() -> StandardMaterial3D:
-	var material := _make_material(Color("#927b49"), 0.96, 0.0, false, true)
-	material.albedo_color = Color("#927b49")
+func _make_terrain_material() -> Material:
+	var shader := Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode cull_disabled, diffuse_lambert, specular_schlick_ggx;
+
+uniform sampler2D grass_albedo : source_color, repeat_enable, filter_linear_mipmap;
+uniform sampler2D grass_height : repeat_enable, filter_linear_mipmap;
+uniform sampler2D dirt_albedo : source_color, repeat_enable, filter_linear_mipmap;
+uniform sampler2D dirt_height : repeat_enable, filter_linear_mipmap;
+uniform float detail_tile = 7.33;
+
+float hash21(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float value_noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	float a = hash21(i);
+	float b = hash21(i + vec2(1.0, 0.0));
+	float c = hash21(i + vec2(0.0, 1.0));
+	float d = hash21(i + vec2(1.0, 1.0));
+	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float patch(vec2 uv, vec2 center, vec2 radius, float strength) {
+	vec2 p = (uv - center) / radius;
+	float d = length(p);
+	float edge = value_noise(uv * 24.0 + center * 17.0) * 0.22;
+	return (1.0 - smoothstep(0.38 + edge, 1.0 + edge, d)) * strength;
+}
+
+float dirt_mask_at(vec2 map_uv) {
+	float dirt_mask = 0.0;
+	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.25, 0.50), vec2(0.12, 0.08), 0.95));
+	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.70, 0.24), vec2(0.15, 0.10), 0.90));
+	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.28, 0.72), vec2(0.09, 0.12), 0.82));
+	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.47, 0.22), vec2(0.12, 0.08), 0.72));
+	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.60, 0.63), vec2(0.10, 0.13), 0.78));
+	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.80, 0.55), vec2(0.08, 0.11), 0.62));
+	return smoothstep(0.08, 0.85, dirt_mask);
+}
+
+void fragment() {
+	vec2 map_uv = UV;
+	vec2 detail_uv = UV * detail_tile;
+
+	float dirt_mask = dirt_mask_at(map_uv);
+	vec3 grass = texture(grass_albedo, detail_uv).rgb;
+	vec3 dirt = texture(dirt_albedo, detail_uv * 1.2).rgb;
+
+	vec3 color = mix(grass, dirt, dirt_mask * 0.92);
+	color *= 0.97 + value_noise(detail_uv * 26.0) * 0.06;
+
+	vec2 bump_step = vec2(0.018, 0.0);
+	float grass_h = texture(grass_height, detail_uv).r;
+	float dirt_h = texture(dirt_height, detail_uv * 1.2).r;
+	float h = mix(grass_h, dirt_h, dirt_mask);
+	float hx = mix(texture(grass_height, detail_uv + bump_step.xy).r, texture(dirt_height, detail_uv * 1.2 + bump_step.xy).r, dirt_mask);
+	float hy = mix(texture(grass_height, detail_uv + bump_step.yx).r, texture(dirt_height, detail_uv * 1.2 + bump_step.yx).r, dirt_mask);
+	vec3 normal_sample = normalize(vec3((h - hx) * 2.2, (h - hy) * 2.2, 1.0));
+
+	ALBEDO = color;
+	NORMAL_MAP = normal_sample * 0.5 + 0.5;
+	NORMAL_MAP_DEPTH = 0.55;
+	ROUGHNESS = mix(0.94, 0.98, dirt_mask);
+}
+"""
+
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("grass_albedo", TerrainGrassAlbedo)
+	material.set_shader_parameter("grass_height", TerrainGrassHeight)
+	material.set_shader_parameter("dirt_albedo", TerrainDirtAlbedo)
+	material.set_shader_parameter("dirt_height", TerrainDirtHeight)
+	material.set_shader_parameter("detail_tile", 7.33)
 	return material
 
 

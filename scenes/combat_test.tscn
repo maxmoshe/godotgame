@@ -1,7 +1,7 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene format=3 uid="uid://esre4tdmue7e"]
 
-[ext_resource type="Script" path="res://scripts/combat_test.gd" id="1_combat"]
-[ext_resource type="Script" path="res://scripts/combat_player.gd" id="2_player"]
+[ext_resource type="Script" uid="uid://cwxam5p2no4px" path="res://scripts/combat_test.gd" id="1_combat"]
+[ext_resource type="Script" uid="uid://ckiukvpx2ih0u" path="res://scripts/combat_player.gd" id="2_player"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.35
@@ -14,36 +14,36 @@ height = 1.7
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_player"]
 albedo_color = Color(0.133333, 0.278431, 0.364706, 1)
 
-[node name="CombatTest" type="Node3D"]
+[node name="CombatTest" type="Node3D" unique_id=2061775461]
 script = ExtResource("1_combat")
 
-[node name="Player" type="CharacterBody3D" parent="."]
-position = Vector3(0, 1.0, 8)
+[node name="Player" type="CharacterBody3D" parent="." unique_id=100045510]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 8)
 script = ExtResource("2_player")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
-position = Vector3(0, 0.85, 0)
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player" unique_id=1676648392]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
 shape = SubResource("CapsuleShape3D_player")
 
-[node name="BodyMesh" type="MeshInstance3D" parent="Player"]
+[node name="BodyMesh" type="MeshInstance3D" parent="Player" unique_id=1788714737]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
 visible = false
-position = Vector3(0, 0.85, 0)
 mesh = SubResource("CapsuleMesh_player")
 surface_material_override/0 = SubResource("StandardMaterial3D_player")
 
-[node name="SlingHand" type="Marker3D" parent="Player"]
-position = Vector3(0.42, 1.34, -0.62)
+[node name="SlingHand" type="Marker3D" parent="Player" unique_id=2098228975]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.42, 1.34, -0.62)
 
-[node name="CameraPivot" type="Node3D" parent="Player"]
-position = Vector3(0, 1.45, 0)
+[node name="CameraPivot" type="Node3D" parent="Player" unique_id=961930935]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.45, 0)
 
-[node name="Camera3D" type="Camera3D" parent="Player/CameraPivot"]
+[node name="Camera3D" type="Camera3D" parent="Player/CameraPivot" unique_id=1518669845]
 current = true
 fov = 70.0
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=86266785]
 
-[node name="Reticle" type="Label" parent="HUD"]
+[node name="Reticle" type="Label" parent="HUD" unique_id=97660050]
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
@@ -58,7 +58,7 @@ theme_override_font_sizes/font_size = 28
 text = "+"
 horizontal_alignment = 1
 
-[node name="AimLabel" type="Label" parent="HUD"]
+[node name="AimLabel" type="Label" parent="HUD" unique_id=1052785073]
 offset_left = 22.0
 offset_top = 18.0
 offset_right = 900.0
@@ -67,10 +67,9 @@ theme_override_colors/font_color = Color(0.917647, 0.839216, 0.639216, 1)
 theme_override_font_sizes/font_size = 18
 text = "Right mouse: aim, no zoom | Hold/release left mouse: sling | Esc: map"
 
-[node name="ChargeBar" type="ProgressBar" parent="HUD"]
+[node name="ChargeBar" type="ProgressBar" parent="HUD" unique_id=2026896536]
 offset_left = 22.0
 offset_top = 52.0
 offset_right = 268.0
 offset_bottom = 74.0
-value = 0.0
 show_percentage = false
