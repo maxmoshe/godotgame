@@ -20,6 +20,13 @@ From WSL in this repo, use the checked-in wrapper:
 tools/validate-startup.sh
 ```
 
+This script must load every playable mode directly, not only the default project scene. Current required checks:
+
+- campaign map: `res://scenes/main.tscn`
+- 3D sling combat test: `res://scenes/combat_test.tscn`
+
+When adding a new mode, combat scene, town scene, menu scene, or any other scene that can be entered through gameplay, update `tools/validate-startup.sh` in the same change so the new scene is loaded headlessly too.
+
 This wrapper uses the repo-local Godot binary at:
 
 ```text
@@ -31,11 +38,13 @@ It also redirects Godot's XDG data/config/cache directories into `.godot-user/`,
 Expected result:
 
 - The command exits cleanly.
-- There are no GDScript parse errors.
-- There are no missing scene/resource errors.
-- There are no startup runtime errors from `scenes/main.tscn`.
+- There are no GDScript parse errors in any playable mode.
+- There are no missing scene/resource errors in any playable mode.
+- There are no startup runtime errors from `scenes/main.tscn`, `scenes/combat_test.tscn`, or any future playable scene.
 
-Warnings are acceptable only if they are unrelated to the changed code and do not stop startup. Mention them in the final response.
+`tools/validate-startup.sh` treats `SCRIPT ERROR` and `ERROR:` output as failure even if Godot exits with status `0`. Warnings are acceptable only if they are unrelated to the changed code and do not stop startup. Mention them in the final response.
+
+For input and scene transitions, do not assume `get_viewport()` is always non-null inside `_unhandled_input()`. Guard viewport calls before `set_input_as_handled()` or mouse-position reads, especially around `change_scene_to_file()`.
 
 ## WSL Godot Install
 
@@ -90,6 +99,7 @@ Also inspect any touched `.gd` and `.tscn` files manually for:
 - duplicate config sections in `project.godot`
 - typed variables calling methods that only exist on attached scripts
 - Dictionary dot-access that could be brittle across Godot parser settings
+- playable scenes missing from `tools/validate-startup.sh`
 
 In the final response, say plainly that Godot could not be run and list the structural checks performed.
 

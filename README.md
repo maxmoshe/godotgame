@@ -34,7 +34,19 @@ tools/install-godot-wsl.sh
 - `WASD` or arrow keys: move manually and interrupt automatic travel
 - `Shift`: move faster
 - `I`: toggle inventory
+- `F`: enter the 3D sling combat test
 - Drag inventory items between squares to move, swap, or combine stackable items
+
+## 3D Sling Test
+
+The combat test now opens in a small Judean hill-country pasture with uneven hills, stone terraces, an olive grove, a sheepfold, sheep, rocks, and sling targets placed across the slopes.
+
+- `WASD`: move
+- Mouse: first-person look, clamped only near straight down at the ground and straight up at the sky
+- Right mouse: aim without zooming the camera
+- Hold and release left mouse: charge and throw a sling stone
+- Impacts on targets or terrain spawn a bright stone-spark burst and fading surface heat mark
+- `Esc`: return to the campaign map
 
 ## First Files To Edit
 
@@ -44,6 +56,11 @@ tools/install-godot-wsl.sh
 - `scripts/main.gd`: connects the player, map, camera, and location label
 - `scripts/inventory_panel.gd`: inventory slots, item stacks, item weight, and starter items
 - `scripts/inventory_slot.gd`: drag and drop behavior for inventory squares
+- `scenes/combat_test.tscn`: 3D sling combat test arena
+- `scripts/combat_player.gd`: first-person movement and sling throwing
+- `scripts/impact_sparks.gd`: short-lived impact particles for sling stones
+- `scripts/sling_stone.gd`: sling projectile lifetime and hit detection
+- `scripts/target_dummy.gd`: simple target hit counter
 
 ## Good Next Steps
 

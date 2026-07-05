@@ -52,13 +52,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		inventory_panel.visible = not inventory_panel.visible
 		if not inventory_panel.visible:
 			market_panel.visible = false
-		get_viewport().set_input_as_handled()
+		_mark_input_handled()
+		return
+
+	if key_event != null and key_event.pressed and not key_event.echo and key_event.keycode == KEY_F:
+		_mark_input_handled()
+		get_tree().change_scene_to_file("res://scenes/combat_test.tscn")
 		return
 
 	if dialogue_panel.visible:
 		if _is_dialogue_advance_click(event):
 			_advance_dialogue()
-			get_viewport().set_input_as_handled()
+			_mark_input_handled()
 		return
 
 	if _is_pointer_over_inventory() or _is_pointer_over_market():
@@ -198,13 +203,19 @@ func _should_follow_mouse_pointer() -> bool:
 
 
 func _is_pointer_over_inventory() -> bool:
+	var viewport := get_viewport()
+	if viewport == null:
+		return false
 	return inventory_panel.visible \
-		and inventory_panel.get_global_rect().has_point(get_viewport().get_mouse_position())
+		and inventory_panel.get_global_rect().has_point(viewport.get_mouse_position())
 
 
 func _is_pointer_over_market() -> bool:
+	var viewport := get_viewport()
+	if viewport == null:
+		return false
 	return market_panel.visible \
-		and market_panel.get_global_rect().has_point(get_viewport().get_mouse_position())
+		and market_panel.get_global_rect().has_point(viewport.get_mouse_position())
 
 
 func _is_dialogue_advance_click(event: InputEvent) -> bool:
@@ -216,4 +227,14 @@ func _is_dialogue_advance_click(event: InputEvent) -> bool:
 	if not dialogue_continue_button.visible:
 		return false
 
-	return dialogue_panel.get_global_rect().has_point(get_viewport().get_mouse_position())
+	var viewport := get_viewport()
+	if viewport == null:
+		return false
+
+	return dialogue_panel.get_global_rect().has_point(viewport.get_mouse_position())
+
+
+func _mark_input_handled() -> void:
+	var viewport := get_viewport()
+	if viewport != null:
+		viewport.set_input_as_handled()

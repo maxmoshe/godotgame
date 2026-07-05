@@ -1,14 +1,18 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene format=3 uid="uid://p2wxnygultpr"]
 
-[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="Script" path="res://scripts/campaign_map.gd" id="2_map"]
-[ext_resource type="Script" path="res://scripts/player.gd" id="3_player"]
-[ext_resource type="Script" path="res://scripts/inventory_panel.gd" id="4_inventory"]
+[ext_resource type="Script" uid="uid://d0t2igfnwh20i" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" uid="uid://dhd5jkmbmvgif" path="res://scripts/campaign_map.gd" id="2_map"]
+[ext_resource type="Script" uid="uid://gb3hma3vjc87" path="res://scripts/player.gd" id="3_player"]
+[ext_resource type="Script" uid="uid://8gg356mk88a3" path="res://scripts/inventory_panel.gd" id="4_inventory"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 15.0
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_dialogue"]
+content_margin_left = 22.0
+content_margin_top = 18.0
+content_margin_right = 22.0
+content_margin_bottom = 18.0
 bg_color = Color(0.145098, 0.105882, 0.0745098, 0.96)
 border_width_left = 3
 border_width_top = 3
@@ -19,33 +23,28 @@ corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
-content_margin_left = 22.0
-content_margin_top = 18.0
-content_margin_right = 22.0
-content_margin_bottom = 18.0
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1777730859]
 script = ExtResource("1_main")
 
-[node name="CampaignMap" type="Node2D" parent="."]
+[node name="CampaignMap" type="Node2D" parent="." unique_id=344879102]
 script = ExtResource("2_map")
 
-[node name="Player" type="CharacterBody2D" parent="."]
+[node name="Player" type="CharacterBody2D" parent="." unique_id=860567383]
 position = Vector2(28, 258)
 script = ExtResource("3_player")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Player"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Player" unique_id=1194185788]
 shape = SubResource("CircleShape2D_player")
 
-[node name="Camera2D" type="Camera2D" parent="Player"]
-enabled = true
+[node name="Camera2D" type="Camera2D" parent="Player" unique_id=1284048959]
 zoom = Vector2(0.82, 0.82)
 position_smoothing_enabled = true
 position_smoothing_speed = 7.0
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=315666844]
 
-[node name="LocationLabel" type="Label" parent="HUD"]
+[node name="LocationLabel" type="Label" parent="HUD" unique_id=1169439197]
 offset_left = 22.0
 offset_top = 18.0
 offset_right = 620.0
@@ -54,16 +53,16 @@ theme_override_colors/font_color = Color(0.94, 0.86, 0.66, 1)
 theme_override_font_sizes/font_size = 24
 text = "Open country"
 
-[node name="HelpLabel" type="Label" parent="HUD"]
+[node name="HelpLabel" type="Label" parent="HUD" unique_id=1246171898]
 offset_left = 22.0
 offset_top = 52.0
 offset_right = 760.0
 offset_bottom = 84.0
 theme_override_colors/font_color = Color(0.82, 0.74, 0.58, 1)
 theme_override_font_sizes/font_size = 17
-text = "Click a city or NPC party to travel there. Hold left mouse to follow the pointer. Press I for inventory."
+text = "Click a city or NPC party to travel there. Hold left mouse to follow the pointer. Press I for inventory, F for sling test."
 
-[node name="DialoguePanel" type="Panel" parent="HUD"]
+[node name="DialoguePanel" type="Panel" parent="HUD" unique_id=1538365684]
 visible = false
 offset_left = 316.0
 offset_top = 420.0
@@ -71,7 +70,7 @@ offset_right = 964.0
 offset_bottom = 690.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_dialogue")
 
-[node name="TitleLabel" type="Label" parent="HUD/DialoguePanel"]
+[node name="TitleLabel" type="Label" parent="HUD/DialoguePanel" unique_id=490593349]
 layout_mode = 0
 offset_left = 24.0
 offset_top = 18.0
@@ -81,7 +80,7 @@ theme_override_colors/font_color = Color(0.956863, 0.870588, 0.639216, 1)
 theme_override_font_sizes/font_size = 27
 text = "Encounter"
 
-[node name="BodyLabel" type="Label" parent="HUD/DialoguePanel"]
+[node name="BodyLabel" type="Label" parent="HUD/DialoguePanel" unique_id=478134253]
 layout_mode = 0
 offset_left = 24.0
 offset_top = 64.0
@@ -92,7 +91,7 @@ theme_override_font_sizes/font_size = 19
 text = "Dialogue"
 autowrap_mode = 3
 
-[node name="TradeButton" type="Button" parent="HUD/DialoguePanel"]
+[node name="TradeButton" type="Button" parent="HUD/DialoguePanel" unique_id=1908753940]
 visible = false
 layout_mode = 0
 offset_left = 250.0
@@ -102,7 +101,7 @@ offset_bottom = 248.0
 theme_override_font_sizes/font_size = 18
 text = "Trade"
 
-[node name="ContinueButton" type="Button" parent="HUD/DialoguePanel"]
+[node name="ContinueButton" type="Button" parent="HUD/DialoguePanel" unique_id=195565172]
 layout_mode = 0
 offset_left = 320.0
 offset_top = 208.0
@@ -111,7 +110,7 @@ offset_bottom = 248.0
 theme_override_font_sizes/font_size = 18
 text = "Continue"
 
-[node name="LeaveButton" type="Button" parent="HUD/DialoguePanel"]
+[node name="LeaveButton" type="Button" parent="HUD/DialoguePanel" unique_id=302532674]
 layout_mode = 0
 offset_left = 472.0
 offset_top = 208.0
@@ -120,17 +119,15 @@ offset_bottom = 248.0
 theme_override_font_sizes/font_size = 18
 text = "Leave"
 
-[node name="InventoryPanel" type="Panel" parent="HUD"]
+[node name="InventoryPanel" type="Panel" parent="HUD" unique_id=1750794286]
 visible = false
 offset_left = 842.0
 offset_top = 80.0
 offset_right = 1248.0
 offset_bottom = 430.0
 script = ExtResource("4_inventory")
-title_text = "Inventory"
-seed_profile = "player"
 
-[node name="MarketPanel" type="Panel" parent="HUD"]
+[node name="MarketPanel" type="Panel" parent="HUD" unique_id=969622359]
 visible = false
 offset_left = 32.0
 offset_top = 80.0
