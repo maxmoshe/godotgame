@@ -1,6 +1,8 @@
 extends CharacterBody3D
 
 const HumanProjectile := preload("res://scripts/human_projectile.gd")
+const ImpactSparks := preload("res://scripts/impact_sparks.gd")
+const DamageNumber := preload("res://scripts/damage_number.gd")
 
 const WEAPON_SWORD := "sword"
 const WEAPON_SPEAR := "spear"
@@ -16,7 +18,7 @@ const GRAVITY := 22.0
 const GROUND_STICK_VELOCITY := -0.25
 const MAX_STAT := 50
 const MIN_STAT := 1
-const BASE_MELEE_DAMAGE := 7
+const BASE_MELEE_DAMAGE := 10
 const BASE_ARROW_DAMAGE := 5
 const ARROW_SPEED := 22.0
 const ARROW_RELEASE_HEIGHT := 1.05
@@ -25,15 +27,18 @@ const BOW_AIM_HEIGHT := 0.86
 const MAX_ARROW_LEAD_SECONDS := 1.2
 const SWORD_ATTACK_RANGE := 1.85
 const BOW_ATTACK_RANGE := 18.0
-const SWORD_ATTACK_COOLDOWN := 1.05
+const SWORD_ATTACK_COOLDOWN := 0.95
 const BOW_CHARGE_SECONDS := 2.1
 const BOW_CHARGING_MOVE_MULTIPLIER := 0.35
 const FRIENDLY_FIRE_LANE_RADIUS := 0.82
 const FRIENDLY_FIRE_SCORE_PENALTY := 1000.0
 const HOLD_POSITION_ARRIVAL_DISTANCE := 0.55
 const HOLD_DEFEND_RADIUS := 8.0
-const ATTACK_SECONDS := 0.62
-const ATTACK_STRIKE_TIME := 0.32
+const ATTACK_SECONDS := 0.56
+const ATTACK_STRIKE_TIME := 0.24
+const MELEE_KNOCKBACK := 2.7
+const MELEE_HIT_HEIGHT := 1.05
+const MELEE_DAMAGE_FULL_RED := 18.0
 const HEADSHOT_MULTIPLIER := 3
 const HEAD_CENTER := Vector3(0.0, 1.62, 0.0)
 const HEAD_RADIUS := Vector3(0.42, 0.38, 0.42)
@@ -147,8 +152,9 @@ func take_hit(damage: int) -> void:
 	_apply_damage(damage)
 
 
-func take_damage(damage: int, _source_position := Vector3.ZERO) -> void:
+func take_damage(damage: int, source_position := Vector3.ZERO) -> void:
 	_apply_damage(damage)
+	_apply_melee_knockback(source_position)
 
 
 func take_projectile_hit(damage: int, hit_position: Vector3) -> int:
@@ -250,7 +256,9 @@ func _check_attack_strike(distance: float) -> void:
 			return
 		_fire_arrow(_active_target)
 	elif _active_target.has_method("take_damage"):
-		_active_target.take_damage(_damage_from_power(BASE_MELEE_DAMAGE), global_position)
+		var damage := _damage_from_power(BASE_MELEE_DAMAGE)
+		_active_target.take_damage(damage, global_position)
+		_spawn_melee_hit_feedback(_active_target, damage)
 
 
 func _apply_damage(damage: int) -> void:
@@ -262,6 +270,60 @@ func _apply_damage(damage: int) -> void:
 	_update_health_label()
 	if health <= 0:
 		_die()
+
+
+func _apply_melee_knockback(source_position: Vector3) -> void:
+	if source_position == Vector3.ZERO or health <= 0:
+		return
+
+	var knockback := global_position - source_position
+	knockback.y = 0.0
+	if knockback.length() <= 0.01:
+		return
+
+	knockback = knockback.normalized()
+	velocity.x += knockback.x * MELEE_KNOCKBACK
+	velocity.z += knockback.z * MELEE_KNOCKBACK
+	velocity.y = maxf(velocity.y, 1.2)
+
+
+func _spawn_melee_hit_feedback(target: Node3D, damage: int) -> void:
+	var parent := get_tree().current_scene
+	if parent == null or target == null:
+		return
+
+	var hit_direction := target.global_position - global_position
+	hit_direction.y = 0.0
+	if hit_direction.length() <= 0.01:
+		hit_direction = -global_transform.basis.z
+	hit_direction = hit_direction.normalized()
+
+	var hit_position := target.global_position + Vector3.UP * MELEE_HIT_HEIGHT - hit_direction * 0.18
+	_spawn_melee_sparks(parent, hit_position, hit_direction)
+	_spawn_melee_damage_number(parent, hit_position, damage)
+
+
+func _spawn_melee_sparks(parent: Node, hit_position: Vector3, hit_direction: Vector3) -> void:
+	var sparks := Node3D.new()
+	sparks.name = "MeleeImpactSparks"
+	sparks.set_script(ImpactSparks)
+	parent.add_child(sparks)
+
+	var burst_normal := (hit_direction + Vector3.UP * 0.45).normalized()
+	sparks.burst(hit_position, burst_normal)
+
+
+func _spawn_melee_damage_number(parent: Node, hit_position: Vector3, damage: int) -> void:
+	var number := Label3D.new()
+	number.name = "MeleeDamageNumber"
+	number.set_script(DamageNumber)
+	parent.add_child(number)
+	number.start(damage, hit_position + Vector3.UP * 0.12, _melee_damage_color(damage))
+
+
+func _melee_damage_color(damage: int) -> Color:
+	var red_weight := clampf(float(damage) / MELEE_DAMAGE_FULL_RED, 0.0, 1.0)
+	return Color("#fff2a8").lerp(Color("#ff321f"), red_weight)
 
 
 func _die() -> void:
@@ -798,15 +860,27 @@ func _animate_walk(flat_speed: float) -> void:
 
 
 func _animate_sword_attack() -> void:
-	var elapsed := ATTACK_SECONDS - _attack_time
-	var swing := smoothstep(0.0, 1.0, clampf(elapsed / ATTACK_SECONDS, 0.0, 1.0))
+	var attack_seconds := _attack_duration_seconds()
+	var elapsed := attack_seconds - _attack_time
+	var swing := smoothstep(0.0, 1.0, clampf(elapsed / attack_seconds, 0.0, 1.0))
 	var slash := sin(swing * PI)
-	_right_arm_mesh.rotation_degrees.x -= 48.0 * slash
-	_right_arm_mesh.rotation_degrees.y -= 20.0 * swing
-	_sword_blade_mesh.rotation_degrees.x -= 72.0 * slash
-	_sword_blade_mesh.rotation_degrees.y -= 24.0 * swing
-	_sword_handle_mesh.rotation_degrees.x -= 72.0 * slash
-	_sword_guard_mesh.rotation_degrees.x -= 72.0 * slash
+	var lunge := sin(clampf(swing / 0.78, 0.0, 1.0) * PI)
+	var recoil := clampf((swing - 0.62) / 0.38, 0.0, 1.0)
+
+	_body_mesh.position.z -= 0.18 * lunge
+	_head_mesh.position.z -= 0.12 * lunge
+	_left_arm_mesh.rotation_degrees.x -= 18.0 * lunge
+	_right_arm_mesh.rotation_degrees.x -= 72.0 * slash + 12.0 * swing
+	_right_arm_mesh.rotation_degrees.y -= 34.0 * swing
+	_right_arm_mesh.rotation_degrees.z -= 18.0 * slash
+	_sword_blade_mesh.rotation_degrees.x -= 112.0 * slash + 14.0 * swing
+	_sword_blade_mesh.rotation_degrees.y -= 44.0 * swing
+	_sword_blade_mesh.rotation_degrees.z += 16.0 * slash
+	_sword_handle_mesh.rotation_degrees.x -= 102.0 * slash + 12.0 * swing
+	_sword_handle_mesh.rotation_degrees.y -= 34.0 * swing
+	_sword_guard_mesh.rotation_degrees.x -= 102.0 * slash + 12.0 * swing
+	_sword_guard_mesh.rotation_degrees.y -= 34.0 * swing
+	_body_mesh.rotation_degrees.x += 7.0 * lunge - 4.0 * recoil
 
 
 func _animate_bow_attack() -> void:

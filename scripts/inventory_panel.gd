@@ -109,6 +109,19 @@ func clear_inventory() -> void:
 	_refresh_slots()
 
 
+func get_slots_copy() -> Array:
+	return _slots.duplicate(true)
+
+
+func load_slots(saved_slots: Array) -> void:
+	for i in range(_slots.size()):
+		if i < saved_slots.size():
+			_slots[i] = Dictionary(saved_slots[i]).duplicate()
+		else:
+			_slots[i] = {}
+	_refresh_slots()
+
+
 func has_item(slot_index: int) -> bool:
 	return _is_valid_slot(slot_index) and not Dictionary(_slots[slot_index]).is_empty()
 

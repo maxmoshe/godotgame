@@ -4,6 +4,7 @@
 [ext_resource type="Script" uid="uid://dhd5jkmbmvgif" path="res://scripts/campaign_map.gd" id="2_map"]
 [ext_resource type="Script" uid="uid://gb3hma3vjc87" path="res://scripts/player.gd" id="3_player"]
 [ext_resource type="Script" uid="uid://8gg356mk88a3" path="res://scripts/inventory_panel.gd" id="4_inventory"]
+[ext_resource type="Script" path="res://scripts/party_panel.gd" id="5_party"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_player"]
 radius = 15.0
@@ -31,7 +32,7 @@ script = ExtResource("1_main")
 script = ExtResource("2_map")
 
 [node name="Player" type="CharacterBody2D" parent="." unique_id=860567383]
-position = Vector2(28, 258)
+position = Vector2(84, 774)
 script = ExtResource("3_player")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Player" unique_id=1194185788]
@@ -60,7 +61,17 @@ offset_right = 760.0
 offset_bottom = 84.0
 theme_override_colors/font_color = Color(0.82, 0.74, 0.58, 1)
 theme_override_font_sizes/font_size = 17
-text = "Click a city or NPC party to travel there. Hold left mouse to follow the pointer. Press I for inventory, F for sling test."
+text = "Click a city, lord, or NPC party to travel there. Hold left mouse to follow the pointer. Press I for inventory, P for party, F for sling test."
+
+[node name="TimeLabel" type="Label" parent="HUD"]
+offset_left = 960.0
+offset_top = 18.0
+offset_right = 1248.0
+offset_bottom = 50.0
+theme_override_colors/font_color = Color(0.94, 0.86, 0.66, 1)
+theme_override_font_sizes/font_size = 24
+text = "Day 1  06:00"
+horizontal_alignment = 2
 
 [node name="DialoguePanel" type="Panel" parent="HUD" unique_id=1538365684]
 visible = false
@@ -101,6 +112,26 @@ offset_bottom = 248.0
 theme_override_font_sizes/font_size = 18
 text = "Trade"
 
+[node name="RecruitButton" type="Button" parent="HUD/DialoguePanel"]
+visible = false
+layout_mode = 0
+offset_left = 104.0
+offset_top = 208.0
+offset_right = 236.0
+offset_bottom = 248.0
+theme_override_font_sizes/font_size = 18
+text = "Recruit (1)"
+
+[node name="AttackButton" type="Button" parent="HUD/DialoguePanel"]
+visible = false
+layout_mode = 0
+offset_left = 104.0
+offset_top = 208.0
+offset_right = 236.0
+offset_bottom = 248.0
+theme_override_font_sizes/font_size = 18
+text = "Attack"
+
 [node name="ContinueButton" type="Button" parent="HUD/DialoguePanel" unique_id=195565172]
 layout_mode = 0
 offset_left = 320.0
@@ -137,3 +168,11 @@ script = ExtResource("4_inventory")
 weight_capacity = 120.0
 title_text = "Town Market"
 seed_profile = "market"
+
+[node name="PartyPanel" type="Panel" parent="HUD"]
+visible = false
+offset_left = 842.0
+offset_top = 80.0
+offset_right = 1248.0
+offset_bottom = 420.0
+script = ExtResource("5_party")

@@ -23,6 +23,10 @@ const COMMAND_RAY_LENGTH := 95.0
 const COMMAND_RAY_STEP := 0.45
 const COMMAND_INVALID_POSITION := Vector3(999999.0, 999999.0, 999999.0)
 const FORMATION_SPACING := 1.65
+const BATTLE_FORMATION_SPACING := 2.25
+const BATTLE_FORMATION_COLUMNS := 15
+const CAMPAIGN_CHUNK_SIZE := 220.0
+const CAMPAIGN_TO_TERRAIN_SCALE := 8.0
 
 @onready var player: CharacterBody3D = $Player
 @onready var player_camera: Camera3D = $Player/CameraPivot/Camera3D
@@ -40,9 +44,18 @@ var _command_mode := false
 var _command_position := Vector3.ZERO
 var _command_marker: Node3D
 var _command_menu_label: Label
+var _combat_campaign_position := Vector2.ZERO
+var _combat_chunk := Vector2i.ZERO
+var _combat_seed := 1
+var _combat_local_terrain_offset := Vector2.ZERO
+var _combat_decoration_offset := Vector2.ZERO
+var _combat_uv_offset := Vector2.ZERO
+var _combat_context: Dictionary = {}
 
 
 func _ready() -> void:
+	_combat_context = GameState.get_combat_context()
+	_capture_combat_map_context()
 	_setup_environment()
 	_setup_command_ui()
 	_place_player_on_terrain(PLAYER_SPAWN)
@@ -50,6 +63,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	if Input.is_key_pressed(KEY_ESCAPE):
+		GameState.clear_combat_context()
 		get_tree().change_scene_to_file("res://scenes/main.tscn")
 		return
 
@@ -258,6 +272,13 @@ func _setup_environment() -> void:
 	_add_ground_visibility_underlay()
 	_add_path()
 	_add_small_rocks()
+	if _is_lord_combat():
+		_add_lord_combat_parties()
+	else:
+		_add_test_targets_and_soldiers()
+
+
+func _add_test_targets_and_soldiers() -> void:
 	_add_target(Vector3(0.0, _terrain_height(0.0, -20.0), -20.0))
 	_add_target(Vector3(8.5, _terrain_height(8.5, -30.0), -30.0))
 	_add_target(Vector3(-13.0, _terrain_height(-13.0, -26.0), -26.0))
@@ -267,6 +288,85 @@ func _setup_environment() -> void:
 	_add_soldier(Vector3(4.0, _terrain_height(4.0, -5.0), -5.0), "friendly", "sword", 5, 5, 3)
 	_add_soldier(Vector3(7.0, _terrain_height(7.0, -8.0), -8.0), "friendly", "sword", 5, 5, 3)
 	_add_soldier(Vector3(10.5, _terrain_height(10.5, -3.5), -3.5), "friendly", "bow", 3, 5, 4)
+
+
+func _add_lord_combat_parties() -> void:
+	var enemy_count := maxi(0, int(_combat_context.get("enemy_party_size", 0)))
+	var player_party := Dictionary(_combat_context.get("player_party", {}))
+	var friendly_count := _party_combat_soldier_count(player_party)
+
+	for index in range(enemy_count):
+		var weapon := _enemy_weapon_for_index(index)
+		var position := _battle_spawn_position(index, enemy_count, "enemy")
+		_add_soldier(position, "enemy", weapon, 5, 5, 4 if weapon == "bow" else 3)
+
+	for index in range(friendly_count):
+		var weapon := _friendly_weapon_for_index(index)
+		var position := _battle_spawn_position(index, friendly_count, "friendly")
+		_add_soldier(position, "friendly", weapon, 5, 5, 4 if weapon == "bow" else 3)
+
+
+func _party_combat_soldier_count(player_party: Dictionary) -> int:
+	var generic_count := int(player_party.get("generic_soldier_count", 0))
+	var named_characters := Array(player_party.get("named_characters", []))
+	return maxi(0, generic_count) + named_characters.size()
+
+
+func _battle_spawn_position(index: int, count: int, faction: String) -> Vector3:
+	var columns := mini(BATTLE_FORMATION_COLUMNS, maxi(1, count))
+	var row := int(index / columns)
+	var column := index % columns
+	var row_width := float(columns - 1) * BATTLE_FORMATION_SPACING
+	var x := float(column) * BATTLE_FORMATION_SPACING - row_width * 0.5
+	var z := 14.0 + float(row) * BATTLE_FORMATION_SPACING
+	if faction == "enemy":
+		z = -18.0 - float(row) * BATTLE_FORMATION_SPACING
+
+	x = clampf(x, -TERRAIN_HALF + 2.0, TERRAIN_HALF - 2.0)
+	z = clampf(z, -TERRAIN_HALF + 2.0, TERRAIN_HALF - 2.0)
+	return Vector3(x, _terrain_height(x, z) + PLAYER_FOOT_CLEARANCE, z)
+
+
+func _enemy_weapon_for_index(index: int) -> String:
+	if index % 5 == 4:
+		return "bow"
+	return "sword"
+
+
+func _friendly_weapon_for_index(index: int) -> String:
+	if index % 6 == 5:
+		return "bow"
+	return "sword"
+
+
+func _is_lord_combat() -> bool:
+	return String(_combat_context.get("type", "")) == "lord"
+
+
+func _capture_combat_map_context() -> void:
+	_combat_campaign_position = GameState.campaign_position
+	_combat_chunk = Vector2i(
+		int(floor(_combat_campaign_position.x / CAMPAIGN_CHUNK_SIZE)),
+		int(floor(_combat_campaign_position.y / CAMPAIGN_CHUNK_SIZE))
+	)
+	_combat_seed = _seed_from_chunk(_combat_chunk)
+
+	var chunk_center := (Vector2(_combat_chunk) + Vector2(0.5, 0.5)) * CAMPAIGN_CHUNK_SIZE
+	_combat_local_terrain_offset = (_combat_campaign_position - chunk_center) * CAMPAIGN_TO_TERRAIN_SCALE
+	_combat_decoration_offset = _wrap_offset_to_terrain(_combat_local_terrain_offset)
+	_combat_uv_offset = _combat_campaign_position * (CAMPAIGN_TO_TERRAIN_SCALE / TERRAIN_SIZE)
+
+
+func _seed_from_chunk(chunk: Vector2i) -> int:
+	var roll := _hash21(Vector2(float(chunk.x), float(chunk.y)) + Vector2(19.37, -43.11))
+	return maxi(1, int(floor(roll * 1000000000.0)))
+
+
+func _wrap_offset_to_terrain(offset: Vector2) -> Vector2:
+	return Vector2(
+		wrapf(offset.x, -TERRAIN_HALF, TERRAIN_HALF),
+		wrapf(offset.y, -TERRAIN_HALF, TERRAIN_HALF)
+	)
 
 
 func _add_world_environment() -> void:
@@ -401,11 +501,12 @@ func _build_terrain_mesh() -> ArrayMesh:
 
 
 func _terrain_height(x: float, z: float) -> float:
-	var north_ridge := 1.55 * exp(-pow((z + 19.0) / 16.0, 2.0))
-	var west_swell := 1.15 * exp(-(pow((x + 24.0) / 18.0, 2.0) + pow((z - 2.0) / 24.0, 2.0)))
-	var east_swell := 0.85 * exp(-(pow((x - 22.0) / 23.0, 2.0) + pow((z + 11.0) / 20.0, 2.0)))
-	var shallow_wadi := -0.85 * exp(-(pow((x - 1.5) / 9.0, 2.0) + pow((z + 1.0) / 32.0, 2.0)))
-	var ripple := 0.22 * sin(x * 0.22) + 0.14 * cos((x + z) * 0.17)
+	var sample := Vector2(x, z) + _combat_local_terrain_offset
+	var north_ridge := _seeded_range(11, 1.25, 1.85) * exp(-pow((sample.y + _seeded_range(12, 14.0, 24.0)) / _seeded_range(13, 13.0, 19.0), 2.0))
+	var west_swell := _seeded_range(21, 0.85, 1.45) * exp(-(pow((sample.x + _seeded_range(22, 18.0, 30.0)) / _seeded_range(23, 15.0, 22.0), 2.0) + pow((sample.y - _seeded_range(24, -4.0, 8.0)) / _seeded_range(25, 20.0, 29.0), 2.0)))
+	var east_swell := _seeded_range(31, 0.65, 1.2) * exp(-(pow((sample.x - _seeded_range(32, 15.0, 28.0)) / _seeded_range(33, 19.0, 27.0), 2.0) + pow((sample.y + _seeded_range(34, 6.0, 16.0)) / _seeded_range(35, 17.0, 24.0), 2.0)))
+	var shallow_wadi := -_seeded_range(41, 0.55, 1.05) * exp(-(pow((sample.x - _seeded_range(42, -5.0, 8.0)) / _seeded_range(43, 7.0, 12.0), 2.0) + pow((sample.y + _seeded_range(44, -6.0, 7.0)) / _seeded_range(45, 26.0, 38.0), 2.0)))
+	var ripple := 0.22 * sin(sample.x * _seeded_range(51, 0.18, 0.28) + _seeded_range(52, -PI, PI)) + 0.14 * cos((sample.x + sample.y) * _seeded_range(53, 0.13, 0.22))
 	var spawn_flatten := 0.45 * exp(-(pow(x / 10.0, 2.0) + pow((z - 8.0) / 8.0, 2.0)))
 	var base_height := maxf(-0.35, north_ridge + west_swell + east_swell + shallow_wadi + ripple - spawn_flatten)
 	return base_height + _terrain_surface_relief(x, z)
@@ -414,7 +515,7 @@ func _terrain_height(x: float, z: float) -> float:
 func _terrain_surface_relief(x: float, z: float) -> float:
 	var uv := _terrain_uv(x, z)
 	var dirt := _terrain_dirt_mask_at(uv)
-	var rough_grass := (_value_noise(uv * 42.0 + Vector2(3.0, -7.0)) - 0.5) * 0.035
+	var rough_grass := (_value_noise((uv + _combat_uv_offset) * 42.0 + Vector2(3.0, -7.0)) - 0.5) * 0.035
 	return -dirt * 0.09 + rough_grass * (1.0 - dirt)
 
 
@@ -423,14 +524,25 @@ func _terrain_uv(x: float, z: float) -> Vector2:
 
 
 func _terrain_dirt_mask_at(uv: Vector2) -> float:
-	var dirt_mask := 0.0
-	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.25, 0.50), Vector2(0.12, 0.08), 0.95))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.70, 0.24), Vector2(0.15, 0.10), 0.90))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.28, 0.72), Vector2(0.09, 0.12), 0.82))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.47, 0.22), Vector2(0.12, 0.08), 0.72))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.60, 0.63), Vector2(0.10, 0.13), 0.78))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(uv, Vector2(0.80, 0.55), Vector2(0.08, 0.11), 0.62))
+	var sampled_uv := _wrap_unit_uv(uv + _combat_uv_offset)
+	var dirt_grain := smoothstep(0.48, 0.78, _value_noise((uv + _combat_uv_offset) * 18.0 + Vector2(11.0, -5.0))) * 0.30
+	var dirt_mask := dirt_grain
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(101, Vector2(0.25, 0.50)), Vector2(0.12, 0.08), 0.95))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(102, Vector2(0.70, 0.24)), Vector2(0.15, 0.10), 0.90))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(103, Vector2(0.28, 0.72)), Vector2(0.09, 0.12), 0.82))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(104, Vector2(0.47, 0.22)), Vector2(0.12, 0.08), 0.72))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(105, Vector2(0.60, 0.63)), Vector2(0.10, 0.13), 0.78))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(106, Vector2(0.80, 0.55)), Vector2(0.08, 0.11), 0.62))
 	return smoothstep(0.08, 0.85, dirt_mask)
+
+
+func _wrap_unit_uv(uv: Vector2) -> Vector2:
+	return Vector2(wrapf(uv.x, 0.0, 1.0), wrapf(uv.y, 0.0, 1.0))
+
+
+func _seeded_patch_center(salt: int, base_center: Vector2) -> Vector2:
+	var offset := Vector2(_seeded_range(salt * 2, -0.055, 0.055), _seeded_range(salt * 2 + 1, -0.055, 0.055))
+	return base_center + offset
 
 
 func _terrain_patch(uv: Vector2, center: Vector2, radius: Vector2, strength: float) -> float:
@@ -464,13 +576,14 @@ func _terrain_normal(x: float, z: float) -> Vector3:
 
 
 func _add_path() -> void:
+	var path_shift := Vector3(_combat_decoration_offset.x, 0.0, _combat_decoration_offset.y)
 	var path_points := [
-		Vector3(-30.0, 0.0, 18.0),
-		Vector3(-17.0, 0.0, 10.0),
-		Vector3(-6.0, 0.0, 5.0),
-		Vector3(6.0, 0.0, -6.0),
-		Vector3(18.0, 0.0, -18.0),
-		Vector3(31.0, 0.0, -29.0),
+		Vector3(_seeded_range(201, -34.0, -25.0), 0.0, _seeded_range(202, 14.0, 22.0)) - path_shift,
+		Vector3(_seeded_range(203, -21.0, -13.0), 0.0, _seeded_range(204, 7.0, 14.0)) - path_shift,
+		Vector3(_seeded_range(205, -10.0, -2.0), 0.0, _seeded_range(206, 1.0, 8.0)) - path_shift,
+		Vector3(_seeded_range(207, 2.0, 10.0), 0.0, _seeded_range(208, -10.0, -2.0)) - path_shift,
+		Vector3(_seeded_range(209, 14.0, 22.0), 0.0, _seeded_range(210, -22.0, -14.0)) - path_shift,
+		Vector3(_seeded_range(211, 27.0, 35.0), 0.0, _seeded_range(212, -33.0, -25.0)) - path_shift,
 	]
 	var sampled_points := _sample_path_points(path_points, 1.35)
 	var path_width := 2.4
@@ -590,19 +703,20 @@ func _distance_to_segment_2d(point: Vector2, start: Vector2, finish: Vector2) ->
 
 func _add_small_rocks() -> void:
 	for index in range(86):
-		var angle := float(index) * 2.371
-		var radius := 4.0 + fmod(float(index) * 5.23, 40.0)
-		var x := cos(angle) * radius + sin(float(index) * 0.55) * 2.8
-		var z := sin(angle) * radius + cos(float(index) * 0.37) * 2.8
+		var rock_seed := _combat_seed + index * 37
+		var angle := float(index) * _seeded_range(301, 2.15, 2.63) + _seeded_range(302, 0.0, TAU)
+		var radius := 4.0 + fmod(float(index) * _seeded_range(303, 4.35, 6.1), 40.0)
+		var x := cos(angle) * radius + sin(float(index) * _seeded_range(304, 0.42, 0.72)) * 2.8 - _combat_decoration_offset.x
+		var z := sin(angle) * radius + cos(float(index) * _seeded_range(305, 0.24, 0.50)) * 2.8 - _combat_decoration_offset.y
 		if Vector2(x, z).distance_to(Vector2(PLAYER_SPAWN.x, PLAYER_SPAWN.z)) < 3.5:
 			continue
 
-		var size_roll := pow(_deterministic_unit(index, 222), 1.9)
+		var size_roll := pow(_deterministic_unit(rock_seed, 222), 1.9)
 		var rock_radius := 0.16 + size_roll * 0.86
 		var rock_position := Vector3(x, _terrain_height(x, z), z)
 		if _is_decoration_excluded(rock_position, rock_radius * 1.8):
 			continue
-		_add_small_rock(rock_position, rock_radius, index)
+		_add_small_rock(rock_position, rock_radius, rock_seed)
 
 
 func _add_small_rock(position: Vector3, radius: float, index: int) -> void:
@@ -676,6 +790,14 @@ func _append_rock_triangle(vertices: PackedVector3Array, normals: PackedVector3A
 
 func _deterministic_unit(seed: int, salt: int) -> float:
 	return fmod(absf(sin(float(seed) * 12.9898 + float(salt) * 78.233) * 43758.5453), 1.0)
+
+
+func _seeded_unit(salt: int) -> float:
+	return _deterministic_unit(_combat_seed, salt)
+
+
+func _seeded_range(salt: int, minimum: float, maximum: float) -> float:
+	return lerpf(minimum, maximum, _seeded_unit(salt))
 
 
 func _add_target(position: Vector3) -> void:
@@ -790,6 +912,13 @@ uniform sampler2D grass_height : repeat_enable, filter_linear_mipmap;
 uniform sampler2D dirt_albedo : source_color, repeat_enable, filter_linear_mipmap;
 uniform sampler2D dirt_height : repeat_enable, filter_linear_mipmap;
 uniform float detail_tile = 7.33;
+uniform vec2 map_uv_offset = vec2(0.0, 0.0);
+uniform vec2 patch_center_1 = vec2(0.25, 0.50);
+uniform vec2 patch_center_2 = vec2(0.70, 0.24);
+uniform vec2 patch_center_3 = vec2(0.28, 0.72);
+uniform vec2 patch_center_4 = vec2(0.47, 0.22);
+uniform vec2 patch_center_5 = vec2(0.60, 0.63);
+uniform vec2 patch_center_6 = vec2(0.80, 0.55);
 
 float hash21(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
@@ -814,19 +943,21 @@ float patch(vec2 uv, vec2 center, vec2 radius, float strength) {
 }
 
 float dirt_mask_at(vec2 map_uv) {
-	float dirt_mask = 0.0;
-	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.25, 0.50), vec2(0.12, 0.08), 0.95));
-	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.70, 0.24), vec2(0.15, 0.10), 0.90));
-	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.28, 0.72), vec2(0.09, 0.12), 0.82));
-	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.47, 0.22), vec2(0.12, 0.08), 0.72));
-	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.60, 0.63), vec2(0.10, 0.13), 0.78));
-	dirt_mask = max(dirt_mask, patch(map_uv, vec2(0.80, 0.55), vec2(0.08, 0.11), 0.62));
+	vec2 wrapped_uv = fract(map_uv);
+	float dirt_grain = smoothstep(0.48, 0.78, value_noise(map_uv * 18.0 + vec2(11.0, -5.0))) * 0.30;
+	float dirt_mask = dirt_grain;
+	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_1, vec2(0.12, 0.08), 0.95));
+	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_2, vec2(0.15, 0.10), 0.90));
+	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_3, vec2(0.09, 0.12), 0.82));
+	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_4, vec2(0.12, 0.08), 0.72));
+	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_5, vec2(0.10, 0.13), 0.78));
+	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_6, vec2(0.08, 0.11), 0.62));
 	return smoothstep(0.08, 0.85, dirt_mask);
 }
 
 void fragment() {
-	vec2 map_uv = UV;
-	vec2 detail_uv = UV * detail_tile;
+	vec2 map_uv = UV + map_uv_offset;
+	vec2 detail_uv = UV * detail_tile + map_uv_offset * 18.0;
 
 	float dirt_mask = dirt_mask_at(map_uv);
 	vec3 grass = texture(grass_albedo, detail_uv).rgb;
@@ -857,6 +988,13 @@ void fragment() {
 	material.set_shader_parameter("dirt_albedo", TerrainDirtAlbedo)
 	material.set_shader_parameter("dirt_height", TerrainDirtHeight)
 	material.set_shader_parameter("detail_tile", 7.33)
+	material.set_shader_parameter("map_uv_offset", _combat_uv_offset)
+	material.set_shader_parameter("patch_center_1", _seeded_patch_center(101, Vector2(0.25, 0.50)))
+	material.set_shader_parameter("patch_center_2", _seeded_patch_center(102, Vector2(0.70, 0.24)))
+	material.set_shader_parameter("patch_center_3", _seeded_patch_center(103, Vector2(0.28, 0.72)))
+	material.set_shader_parameter("patch_center_4", _seeded_patch_center(104, Vector2(0.47, 0.22)))
+	material.set_shader_parameter("patch_center_5", _seeded_patch_center(105, Vector2(0.60, 0.63)))
+	material.set_shader_parameter("patch_center_6", _seeded_patch_center(106, Vector2(0.80, 0.55)))
 	return material
 
 

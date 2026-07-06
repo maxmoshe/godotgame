@@ -1,7 +1,7 @@
 extends CharacterBody2D
 
-@export var speed := 270.0
-@export var world_bounds := Rect2(Vector2(-860.0, -1210.0), Vector2(1720.0, 2420.0))
+@export var speed := 135.0
+@export var world_bounds := Rect2(Vector2(-2662.0, -3712.0), Vector2(5324.0, 7424.0))
 
 var _facing := Vector2.RIGHT
 var _travel_target := Vector2.ZERO
