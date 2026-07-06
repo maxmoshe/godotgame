@@ -1,0 +1,61 @@
+{
+  "type": "FeatureCollection",
+  "name": "Southern Levant land and coast outline",
+  "properties": {
+    "layer_type": "physical",
+    "period": "modern physical base",
+    "crs": "EPSG:4326",
+    "source_notes": [
+      "Simplified strategy-map outline hand traced from modern coastline and regional landform references.",
+      "For higher precision, replace this feature with a clipped Natural Earth or OpenStreetMap coastline export while keeping the same layer contract."
+    ]
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "land_southern_levant",
+      "properties": {
+        "name": "Southern Levant landmass",
+        "kind": "land",
+        "confidence": "medium",
+        "notes": "Includes Israel, Palestine, western Jordan, southern Lebanon edge, Damascus edge, northern Sinai edge, and northwestern Arabia edge for campaign context."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [34.30, 34.55], [35.00, 34.65], [35.72, 34.55], [36.20, 34.20],
+          [36.55, 33.60], [36.62, 32.80], [36.40, 32.10], [36.12, 31.50],
+          [35.88, 30.90], [35.55, 30.25], [35.12, 29.82], [34.65, 29.72],
+          [34.10, 30.10], [33.80, 30.70], [33.68, 31.10], [33.92, 31.20],
+          [34.22, 31.32], [34.39, 31.48], [34.46, 31.55], [34.56, 31.67],
+          [34.62, 31.80], [34.71, 31.96], [34.75, 32.05], [34.80, 32.18],
+          [34.86, 32.33], [34.91, 32.50], [34.95, 32.67], [34.98, 32.82],
+          [35.06, 32.93], [35.10, 33.08], [35.12, 33.23], [35.18, 33.33],
+          [35.22, 33.50], [35.23, 33.75], [34.95, 34.20], [34.30, 34.55]
+        ]]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "mediterranean_nearshore",
+      "properties": {
+        "name": "Mediterranean nearshore",
+        "kind": "sea_context",
+        "confidence": "high",
+        "notes": "Background sea polygon west of the simplified coastline."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[
+          [33.60, 34.75], [34.30, 34.55], [34.95, 34.20], [35.23, 33.75],
+          [35.22, 33.50], [35.18, 33.33], [35.12, 33.23], [35.10, 33.08],
+          [35.06, 32.93], [34.98, 32.82], [34.95, 32.67], [34.91, 32.50],
+          [34.86, 32.33], [34.80, 32.18], [34.75, 32.05], [34.71, 31.96],
+          [34.62, 31.80], [34.56, 31.67], [34.46, 31.55], [34.39, 31.48],
+          [34.22, 31.32], [33.92, 31.20], [33.68, 31.10], [33.60, 31.10],
+          [33.60, 34.75]
+        ]]
+      }
+    }
+  ]
+}

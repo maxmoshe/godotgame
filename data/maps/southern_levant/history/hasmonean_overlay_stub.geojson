@@ -1,0 +1,14 @@
+{
+  "type": "FeatureCollection",
+  "name": "Hasmonean overlay placeholder",
+  "properties": {
+    "layer_type": "historical_influence",
+    "period": "Hasmonean",
+    "crs": "EPSG:4326",
+    "source_notes": [
+      "Stub layer included to lock the period-overlay structure before later content is authored.",
+      "Future Hasmonean layers should use the same FeatureCollection shape and confidence metadata."
+    ]
+  },
+  "features": []
+}

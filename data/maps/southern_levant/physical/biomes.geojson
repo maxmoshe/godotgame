@@ -1,0 +1,148 @@
+{
+  "type": "FeatureCollection",
+  "name": "Southern Levant biome and gameplay regions",
+  "properties": {
+    "layer_type": "physical_gameplay",
+    "period": "all periods",
+    "crs": "EPSG:4326",
+    "source_notes": [
+      "Seven broad regions are designed for top-down strategy movement and supply rules.",
+      "Boundaries are physical transition zones, not administrative borders."
+    ]
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "biome_coastal_plain",
+      "properties": {
+        "name": "Coastal plain",
+        "biome_id": 1,
+        "movement_cost": 1.0,
+        "supply_value": 4,
+        "water_access": 3,
+        "agriculture_value": 5,
+        "defense_bonus": 1,
+        "settlement_density": 5,
+        "road_difficulty": 1,
+        "seasonal_risk": 2,
+        "render_priority": 10,
+        "notes": "Broadest in the south, narrowing toward Carmel and Phoenicia; fast movement, good agriculture, low natural defense."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[34.10, 33.80], [35.00, 33.75], [35.06, 32.95], [34.96, 32.70], [34.86, 32.30], [34.72, 31.95], [34.55, 31.50], [34.22, 31.32], [33.90, 31.20], [33.70, 31.10], [33.65, 34.60], [34.10, 33.80]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "biome_shephelah",
+      "properties": {
+        "name": "Shephelah / lowland foothills",
+        "biome_id": 2,
+        "movement_cost": 1.3,
+        "supply_value": 4,
+        "water_access": 3,
+        "agriculture_value": 4,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "road_difficulty": 2,
+        "seasonal_risk": 3,
+        "render_priority": 50,
+        "notes": "Rolling foothills and east-west valleys controlling access from Philistia into Judah."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[34.65, 32.05], [34.95, 32.02], [35.12, 31.82], [35.05, 31.38], [34.90, 31.05], [34.63, 31.15], [34.45, 31.52], [34.55, 31.78], [34.65, 32.05]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "biome_central_highlands",
+      "properties": {
+        "name": "Central highlands: Judea, Benjamin, Ephraim/Samaria",
+        "biome_id": 3,
+        "movement_cost": 1.7,
+        "supply_value": 3,
+        "water_access": 3,
+        "agriculture_value": 3,
+        "defense_bonus": 5,
+        "settlement_density": 4,
+        "road_difficulty": 4,
+        "seasonal_risk": 2,
+        "render_priority": 60,
+        "notes": "High ridge country from Hebron/Judah through Benjamin and Ephraim/Samaria."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.02, 32.55], [35.34, 32.55], [35.46, 32.05], [35.38, 31.70], [35.26, 31.20], [35.18, 30.80], [34.92, 30.95], [35.05, 31.38], [35.12, 31.82], [34.95, 32.02], [35.02, 32.55]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "biome_galilee_northern_hills",
+      "properties": {
+        "name": "Galilee and northern hill country",
+        "biome_id": 4,
+        "movement_cost": 1.6,
+        "supply_value": 4,
+        "water_access": 4,
+        "agriculture_value": 4,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "road_difficulty": 3,
+        "seasonal_risk": 2,
+        "render_priority": 30,
+        "notes": "Galilee hills, Carmel edge, Jezreel access, and northern hill country."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[34.95, 34.20], [35.72, 34.55], [36.10, 33.95], [35.92, 33.25], [35.66, 32.95], [35.34, 32.55], [35.02, 32.55], [35.00, 33.75], [34.95, 34.20]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "biome_jordan_rift",
+      "properties": {
+        "name": "Jordan Rift: Jordan Valley, Kinneret, Dead Sea basin",
+        "biome_id": 5,
+        "movement_cost": 1.4,
+        "supply_value": 2,
+        "water_access": 4,
+        "agriculture_value": 2,
+        "defense_bonus": 2,
+        "settlement_density": 2,
+        "road_difficulty": 3,
+        "seasonal_risk": 4,
+        "render_priority": 70,
+        "notes": "Depressed rift corridor with strong north-south movement but difficult cliffs and heat near the Dead Sea."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.46, 33.30], [35.82, 33.20], [35.88, 32.55], [35.78, 31.90], [35.70, 31.25], [35.46, 30.85], [35.18, 30.80], [35.26, 31.20], [35.38, 31.70], [35.46, 32.05], [35.34, 32.55], [35.46, 33.30]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "biome_transjordan_plateau",
+      "properties": {
+        "name": "Transjordan plateau: Ammon, Moab, Gilead, Edom edge",
+        "biome_id": 6,
+        "movement_cost": 1.5,
+        "supply_value": 3,
+        "water_access": 2,
+        "agriculture_value": 3,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "road_difficulty": 3,
+        "seasonal_risk": 3,
+        "render_priority": 25,
+        "notes": "Upland plateau east of the Rift, crossed by deep wadis and royal-road style north-south routes."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.82, 33.20], [36.55, 33.60], [36.62, 32.80], [36.40, 32.10], [36.12, 31.50], [35.88, 30.90], [35.55, 30.25], [35.20, 30.15], [35.46, 30.85], [35.70, 31.25], [35.78, 31.90], [35.88, 32.55], [35.82, 33.20]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "biome_negev_arabah_wilderness",
+      "properties": {
+        "name": "Negev / Arabah / wilderness desert",
+        "biome_id": 7,
+        "movement_cost": 1.9,
+        "supply_value": 1,
+        "water_access": 1,
+        "agriculture_value": 1,
+        "defense_bonus": 3,
+        "settlement_density": 1,
+        "road_difficulty": 5,
+        "seasonal_risk": 5,
+        "render_priority": 20,
+        "notes": "Semi-arid and arid south, Arabah corridor, pastoral and raiding zones with sparse water."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[34.90, 31.05], [35.18, 30.80], [35.46, 30.85], [35.20, 30.15], [34.65, 29.72], [34.10, 30.10], [33.80, 30.70], [33.70, 31.10], [34.22, 31.32], [34.45, 31.52], [34.63, 31.15], [34.90, 31.05]]]}
+    }
+  ]
+}

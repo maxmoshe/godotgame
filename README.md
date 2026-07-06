@@ -24,6 +24,16 @@ If the local Godot binary is missing, reinstall it with:
 tools/install-godot-wsl.sh
 ```
 
+## Map Data
+
+The campaign map now renders from engine-agnostic WGS84 data under:
+
+```text
+data/maps/southern_levant/
+```
+
+The layer manifest is `data/maps/southern_levant/map_manifest.json`. Physical geography, biome/relief abstractions, settlements, routes, passes, fords, chokepoints, and dormant historical overlays are kept as separate GeoJSON/JSON layers so later engines or time periods can reuse or replace them without touching Godot-specific drawing code. The current Godot map renders biome colors, relief texture, roads, water, and faction-colored settlements; ancient influence zones are not drawn.
+
 ## Controls
 
 - Click a city or NPC party: travel there and open an encounter dialogue on arrival

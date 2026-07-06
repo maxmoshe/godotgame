@@ -1,0 +1,278 @@
+{
+  "type": "FeatureCollection",
+  "name": "Iron Age southern Levant approximate influence zones",
+  "properties": {
+    "layer_type": "historical_influence",
+    "period": "Iron Age / Saul-David era",
+    "crs": "EPSG:4326",
+    "rendering_hint": "Render as exclusive gameplay territories. Ancient names are approximate assignments, but polygons should not overlap.",
+    "source_notes": [
+      "Approximate synthesis from biblical historical geography, Iron Age archaeology, and conventional regional topography.",
+      "Confidence describes broad historical assignment, not precise perimeter certainty.",
+      "This gameplay layer uses one faction/region per territory to avoid ambiguous ownership in the prototype.",
+      "This layer intentionally separates political/history overlays from physical geography."
+    ]
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "zone_judah",
+      "properties": {
+        "name": "Judah",
+        "kind": "highland_tribal_kingdom_core",
+        "confidence": "medium",
+        "movement_cost": 1.6,
+        "supply_value": 3,
+        "water_access": 3,
+        "agriculture_value": 3,
+        "defense_bonus": 5,
+        "settlement_density": 4,
+        "road_difficulty": 4,
+        "seasonal_risk": 2,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Hill-country core around Bethlehem, Hebron, and Jerusalem edge; southern and western influence fluctuates historically, but this polygon is exclusive for gameplay."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[34.72, 31.58], [35.08, 31.78], [35.30, 31.86], [35.36, 31.70], [35.28, 31.28], [35.10, 30.90], [35.25, 30.72], [34.80, 31.20], [34.72, 31.58]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_benjamin",
+      "properties": {
+        "name": "Benjamin",
+        "kind": "highland_tribal_zone",
+        "confidence": "medium",
+        "movement_cost": 1.6,
+        "supply_value": 3,
+        "water_access": 3,
+        "agriculture_value": 3,
+        "defense_bonus": 5,
+        "settlement_density": 4,
+        "road_difficulty": 4,
+        "seasonal_risk": 2,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Compact Benjaminite hill zone around Gibeah, Ramah, Michmash, and the Jerusalem approach."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.03, 32.12], [35.35, 32.10], [35.30, 31.86], [35.08, 31.78], [34.92, 31.92], [35.03, 32.12]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_ephraim_samaria",
+      "properties": {
+        "name": "Ephraim / Samaria highlands",
+        "kind": "northern_israelite_highland_core",
+        "confidence": "medium",
+        "movement_cost": 1.6,
+        "supply_value": 4,
+        "water_access": 3,
+        "agriculture_value": 4,
+        "defense_bonus": 5,
+        "settlement_density": 4,
+        "road_difficulty": 4,
+        "seasonal_risk": 2,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Ephraim/Samaria ridge with Shiloh, Shechem, and hill-country settlement continuity."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.00, 32.60], [35.34, 32.55], [35.45, 32.32], [35.35, 32.10], [35.03, 32.12], [34.94, 32.38], [35.00, 32.60]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_galilee",
+      "properties": {
+        "name": "Galilee",
+        "kind": "northern_hill_zone",
+        "confidence": "low",
+        "movement_cost": 1.6,
+        "supply_value": 4,
+        "water_access": 4,
+        "agriculture_value": 4,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "road_difficulty": 3,
+        "seasonal_risk": 2,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Northern hill country; relevance to Saul-David era is contextual and less politically bounded."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.20, 33.10], [35.82, 33.15], [35.95, 33.65], [35.70, 34.15], [35.32, 34.55], [35.20, 33.10]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_gilead",
+      "properties": {
+        "name": "Gilead",
+        "kind": "transjordan_highland_zone",
+        "confidence": "medium",
+        "movement_cost": 1.5,
+        "supply_value": 3,
+        "water_access": 3,
+        "agriculture_value": 3,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "road_difficulty": 3,
+        "seasonal_risk": 3,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Uplands east of the Jordan; includes refuge and cross-Jordan political possibilities."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.58, 32.50], [35.82, 33.15], [36.35, 32.45], [36.10, 32.05], [35.75, 32.10], [35.58, 32.50]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_ammon",
+      "properties": {
+        "name": "Ammon",
+        "kind": "transjordan_kingdom_zone",
+        "confidence": "medium",
+        "movement_cost": 1.5,
+        "supply_value": 3,
+        "water_access": 2,
+        "agriculture_value": 3,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "road_difficulty": 3,
+        "seasonal_risk": 3,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Centered east of the Jordan around Rabbah/Amman; west and south edges are fluid historically, but exclusive here for ownership clarity."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.75, 32.10], [36.10, 32.05], [36.25, 31.70], [36.05, 31.35], [35.72, 31.45], [35.62, 31.80], [35.75, 32.10]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_moab",
+      "properties": {
+        "name": "Moab",
+        "kind": "transjordan_kingdom_zone",
+        "confidence": "medium",
+        "movement_cost": 1.5,
+        "supply_value": 3,
+        "water_access": 2,
+        "agriculture_value": 3,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "road_difficulty": 4,
+        "seasonal_risk": 3,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "East of the Dead Sea, broadly between the Arnon/Mujib and Zered/Hasa, with shifting northern reach."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.72, 31.45], [36.05, 31.35], [35.98, 30.90], [35.72, 30.78], [35.46, 30.92], [35.55, 31.27], [35.57, 31.43], [35.72, 31.45]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_edom_edge",
+      "properties": {
+        "name": "Edom edge",
+        "kind": "southern_transjordan_zone",
+        "confidence": "low",
+        "movement_cost": 1.8,
+        "supply_value": 2,
+        "water_access": 1,
+        "agriculture_value": 1,
+        "defense_bonus": 4,
+        "settlement_density": 2,
+        "road_difficulty": 5,
+        "seasonal_risk": 5,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Northern edge of Edomite/Seir influence, included because full Edom extends south beyond this map extent."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.25, 30.72], [35.46, 30.92], [35.72, 30.78], [35.88, 30.25], [35.50, 29.88], [35.05, 29.82], [35.05, 30.35], [35.25, 30.72]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_philistia",
+      "properties": {
+        "name": "Philistia",
+        "kind": "coastal_city_state_zone",
+        "confidence": "medium",
+        "movement_cost": 1.0,
+        "supply_value": 4,
+        "water_access": 3,
+        "agriculture_value": 5,
+        "defense_bonus": 2,
+        "settlement_density": 5,
+        "road_difficulty": 1,
+        "seasonal_risk": 2,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Coastal and lowland city-state corridor around Gaza, Ashkelon, Ashdod, Gath, and Ekron."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[34.30, 31.95], [34.80, 31.95], [34.72, 31.58], [34.70, 31.20], [34.36, 31.15], [34.22, 31.45], [34.30, 31.95]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_phoenician_coast",
+      "properties": {
+        "name": "Phoenician coast",
+        "kind": "northern_coastal_city_zone",
+        "confidence": "medium",
+        "movement_cost": 1.0,
+        "supply_value": 4,
+        "water_access": 4,
+        "agriculture_value": 4,
+        "defense_bonus": 2,
+        "settlement_density": 5,
+        "road_difficulty": 1,
+        "seasonal_risk": 2,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Northern coastal city corridor, including Tyre/Sidon edge for trade and diplomacy."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[34.70, 34.55], [35.32, 34.55], [35.20, 33.10], [35.00, 33.35], [34.70, 34.55]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_aram_damascus_edge",
+      "properties": {
+        "name": "Aram-Damascus edge",
+        "kind": "northeast_power_edge",
+        "confidence": "low",
+        "movement_cost": 1.4,
+        "supply_value": 3,
+        "water_access": 2,
+        "agriculture_value": 3,
+        "defense_bonus": 3,
+        "settlement_density": 3,
+        "road_difficulty": 3,
+        "seasonal_risk": 3,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Southwestern approach to Aram-Damascus, kept as an edge territory for later-period diplomacy and conflict."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[35.82, 33.15], [36.55, 33.60], [36.60, 34.20], [36.10, 34.35], [35.70, 34.15], [35.95, 33.65], [35.82, 33.15]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_amalek_negev",
+      "properties": {
+        "name": "Amalek / Negev tribal zone",
+        "kind": "pastoral_raiding_zone",
+        "confidence": "low",
+        "movement_cost": 1.9,
+        "supply_value": 1,
+        "water_access": 1,
+        "agriculture_value": 1,
+        "defense_bonus": 3,
+        "settlement_density": 1,
+        "road_difficulty": 5,
+        "seasonal_risk": 5,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Pastoral and raiding zone across the northern Negev and wilderness approaches."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[34.36, 31.15], [34.70, 31.20], [34.80, 31.20], [35.25, 30.72], [35.05, 30.35], [34.45, 30.10], [33.95, 30.45], [33.80, 30.95], [34.36, 31.15]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zone_sinai_egypt_edge",
+      "properties": {
+        "name": "Sinai / Egypt edge",
+        "kind": "southwest_imperial_edge",
+        "confidence": "low",
+        "movement_cost": 2.0,
+        "supply_value": 1,
+        "water_access": 1,
+        "agriculture_value": 1,
+        "defense_bonus": 2,
+        "settlement_density": 1,
+        "road_difficulty": 5,
+        "seasonal_risk": 5,
+        "territory_mode": "exclusive_gameplay",
+        "notes": "Southwestern desert and Egyptian frontier context. Kept broad for future campaign extensions."
+      },
+      "geometry": {"type": "Polygon", "coordinates": [[[33.60, 31.10], [33.80, 30.95], [33.95, 30.45], [34.45, 30.10], [34.65, 29.72], [33.60, 29.70], [33.60, 31.10]]]}
+    }
+  ]
+}

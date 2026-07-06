@@ -1,0 +1,129 @@
+{
+  "type": "FeatureCollection",
+  "name": "Southern Levant water bodies and water sources",
+  "properties": {
+    "layer_type": "physical",
+    "period": "modern physical base with ancient gameplay relevance",
+    "crs": "EPSG:4326",
+    "source_notes": [
+      "Water body outlines are simplified from modern geography references at campaign-map scale.",
+      "Wadis and springs are selected for gameplay value: travel corridors, seasonal risk, refuge, supply, and chokepoints."
+    ]
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "mediterranean_sea_label",
+      "properties": {"name": "Great Sea / Mediterranean", "kind": "sea_label", "water_access": 5, "confidence": "high", "show_label": true},
+      "geometry": {"type": "Point", "coordinates": [34.05, 32.70]}
+    },
+    {
+      "type": "Feature",
+      "id": "sea_of_galilee",
+      "properties": {"name": "Sea of Galilee / Kinneret", "kind": "lake", "water_access": 5, "confidence": "high", "show_label": true},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.55, 32.93], [35.62, 32.89], [35.65, 32.82], [35.63, 32.73], [35.57, 32.70], [35.52, 32.75], [35.51, 32.84], [35.55, 32.93]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "dead_sea",
+      "properties": {"name": "Dead Sea", "kind": "salt_lake", "water_access": 1, "confidence": "high", "show_label": true, "notes": "Saltwater basin; low potable value but major obstacle and landmark."},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.47, 31.76], [35.55, 31.63], [35.56, 31.27], [35.50, 30.92], [35.43, 30.91], [35.37, 31.15], [35.36, 31.48], [35.40, 31.68], [35.47, 31.76]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "hula_wetlands",
+      "properties": {"name": "Hula wetlands", "kind": "wetland", "water_access": 4, "seasonal_risk": 4, "confidence": "medium"},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.56, 33.24], [35.66, 33.22], [35.68, 33.05], [35.60, 32.98], [35.54, 33.07], [35.56, 33.24]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "jordan_river",
+      "properties": {"name": "Jordan River", "kind": "river", "water_access": 4, "confidence": "high", "show_label": true, "label_coordinates": [35.51, 32.20]},
+      "geometry": {"type": "LineString", "coordinates": [[35.65, 33.25], [35.60, 33.05], [35.57, 32.93], [35.58, 32.70], [35.54, 32.45], [35.50, 32.16], [35.48, 31.95], [35.45, 31.76]]}
+    },
+    {
+      "type": "Feature",
+      "id": "yarqon_river",
+      "properties": {"name": "Yarqon River", "kind": "perennial_stream", "water_access": 4, "confidence": "high"},
+      "geometry": {"type": "LineString", "coordinates": [[35.05, 32.10], [34.95, 32.10], [34.86, 32.09], [34.78, 32.10]]}
+    },
+    {
+      "type": "Feature",
+      "id": "kishon_river",
+      "properties": {"name": "Kishon River", "kind": "stream", "water_access": 3, "confidence": "high"},
+      "geometry": {"type": "LineString", "coordinates": [[35.35, 32.62], [35.20, 32.68], [35.08, 32.77], [35.00, 32.80]]}
+    },
+    {
+      "type": "Feature",
+      "id": "wadi_el_arish",
+      "properties": {"name": "Wadi el-Arish", "kind": "wadi", "water_access": 1, "seasonal_risk": 4, "confidence": "medium"},
+      "geometry": {"type": "LineString", "coordinates": [[34.45, 30.15], [34.20, 30.45], [33.95, 30.80], [33.82, 31.12]]}
+    },
+    {
+      "type": "Feature",
+      "id": "besor_wadi",
+      "properties": {"name": "Besor / Wadi Gaza system", "kind": "wadi", "water_access": 2, "seasonal_risk": 3, "confidence": "medium"},
+      "geometry": {"type": "LineString", "coordinates": [[34.95, 30.88], [34.72, 31.08], [34.52, 31.28], [34.46, 31.47]]}
+    },
+    {
+      "type": "Feature",
+      "id": "sorek_wadi",
+      "properties": {"name": "Sorek Valley stream", "kind": "wadi", "water_access": 3, "seasonal_risk": 3, "confidence": "medium"},
+      "geometry": {"type": "LineString", "coordinates": [[35.20, 31.77], [35.02, 31.78], [34.86, 31.82], [34.70, 31.88]]}
+    },
+    {
+      "type": "Feature",
+      "id": "elah_wadi",
+      "properties": {"name": "Elah Valley stream", "kind": "wadi", "water_access": 2, "seasonal_risk": 3, "confidence": "medium"},
+      "geometry": {"type": "LineString", "coordinates": [[35.05, 31.69], [34.92, 31.69], [34.78, 31.67], [34.62, 31.64]]}
+    },
+    {
+      "type": "Feature",
+      "id": "arnon_wadi",
+      "properties": {"name": "Arnon / Wadi Mujib", "kind": "canyon_wadi", "water_access": 2, "seasonal_risk": 4, "confidence": "high"},
+      "geometry": {"type": "LineString", "coordinates": [[35.82, 31.45], [35.70, 31.43], [35.57, 31.43], [35.47, 31.46]]}
+    },
+    {
+      "type": "Feature",
+      "id": "zered_wadi",
+      "properties": {"name": "Zered / Wadi al-Hasa", "kind": "canyon_wadi", "water_access": 2, "seasonal_risk": 4, "confidence": "high"},
+      "geometry": {"type": "LineString", "coordinates": [[35.78, 30.88], [35.65, 30.90], [35.52, 30.95], [35.38, 31.02]]}
+    },
+    {
+      "type": "Feature",
+      "id": "spring_en_gedi",
+      "properties": {"name": "En-gedi spring", "kind": "spring", "water_access": 5, "supply_value": 4, "confidence": "high"},
+      "geometry": {"type": "Point", "coordinates": [35.39, 31.46]}
+    },
+    {
+      "type": "Feature",
+      "id": "spring_gihon",
+      "properties": {"name": "Gihon spring", "kind": "spring", "water_access": 5, "supply_value": 5, "confidence": "high"},
+      "geometry": {"type": "Point", "coordinates": [35.235, 31.777]}
+    },
+    {
+      "type": "Feature",
+      "id": "spring_harod",
+      "properties": {"name": "Spring of Harod", "kind": "spring", "water_access": 4, "supply_value": 3, "confidence": "medium"},
+      "geometry": {"type": "Point", "coordinates": [35.36, 32.55]}
+    },
+    {
+      "type": "Feature",
+      "id": "spring_dan",
+      "properties": {"name": "Dan springs", "kind": "spring", "water_access": 5, "supply_value": 4, "confidence": "high"},
+      "geometry": {"type": "Point", "coordinates": [35.65, 33.25]}
+    },
+    {
+      "type": "Feature",
+      "id": "oasis_kadesh_barnea",
+      "properties": {"name": "Kadesh-barnea oasis zone", "kind": "oasis", "water_access": 4, "supply_value": 3, "confidence": "medium"},
+      "geometry": {"type": "Point", "coordinates": [34.47, 30.65]}
+    },
+    {
+      "type": "Feature",
+      "id": "oasis_tamar",
+      "properties": {"name": "Tamar / Arabah oasis zone", "kind": "oasis", "water_access": 3, "supply_value": 2, "confidence": "medium"},
+      "geometry": {"type": "Point", "coordinates": [35.25, 30.95]}
+    }
+  ]
+}

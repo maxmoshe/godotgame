@@ -1,0 +1,44 @@
+{
+  "dataset_id": "southern_levant_campaign_map",
+  "name": "Southern Levant Campaign Map",
+  "version": "0.1.0",
+  "primary_period": "Iron Age / Saul-David era",
+  "future_periods": ["Hasmonean", "Persian", "Hellenistic", "Roman"],
+  "crs": {
+    "type": "EPSG",
+    "code": 4326,
+    "name": "WGS84 longitude/latitude",
+    "axis_order": "longitude, latitude"
+  },
+  "bbox": [33.6, 29.7, 36.714, 34.75],
+  "godot_projection": {
+    "type": "equirectangular_bbox_fit",
+    "target_rect": {
+      "origin": [-2700.0, -3750.0],
+      "size": [5400.0, 7500.0]
+    },
+    "notes": "Projection is for prototype rendering only. Source coordinates remain WGS84."
+  },
+  "layers": {
+    "land_outline": "physical/land_outline.geojson",
+    "water": "physical/water.geojson",
+    "biomes": "physical/biomes.geojson",
+    "relief": "physical/relief_zones.geojson",
+    "iron_age_influence_zones": "history/iron_age_influence_zones.geojson",
+    "hasmonean_overlay_stub": "history/hasmonean_overlay_stub.geojson",
+    "settlements": "human/settlements.geojson",
+    "routes": "human/routes.geojson",
+    "chokepoints": "human/chokepoints.geojson"
+  },
+  "source_notes": [
+    "Physical coastline, rivers, and water bodies are simplified for a strategy-map scale from public/open modern geography references: Natural Earth, OpenStreetMap, and modern gazetteer coordinates.",
+    "Relief abstraction follows the major physiographic divisions of the southern Levant and is informed by SRTM-style elevation bands rather than raw elevation rasters.",
+    "Iron Age influence zones are historically annotated approximations kept for future overlays. The current Godot campaign map does not render them; settlement ownership is shown by owner_faction colors instead.",
+    "Ancient settlement identifications vary by site. Confidence fields record whether a location is secure, conventional, or tentative."
+  ],
+  "license_notes": [
+    "This hand-authored prototype dataset is intended for reuse in this project.",
+    "If replacing simplified geometry with OpenStreetMap-derived features, preserve ODbL attribution and share-alike obligations.",
+    "Natural Earth data is public domain; NASA SRTM is a public scientific dataset but should be credited when directly used."
+  ]
+}

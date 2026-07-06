@@ -1,0 +1,29 @@
+{
+  "type": "FeatureCollection",
+  "name": "Passes, fords, and chokepoints",
+  "properties": {
+    "layer_type": "human_chokepoints",
+    "period": "Iron Age / Saul-David era with all-period physical relevance",
+    "crs": "EPSG:4326",
+    "source_notes": [
+      "Chokepoints are selected for gameplay and historical-geographic plausibility.",
+      "Point locations mark the useful gameplay center of a pass, ford, or controlled corridor, not a precise surveyed feature."
+    ]
+  },
+  "features": [
+    {"type": "Feature", "id": "choke_aphek_yarqon", "properties": {"name": "Aphek / Yarqon headwaters", "kind": "road_water_chokepoint", "defense_bonus": 3, "road_difficulty": 2, "confidence": "high", "notes": "Controls the inland crossing between Sharon, Samaria, and the coastal route."}, "geometry": {"type": "Point", "coordinates": [34.93, 32.10]}},
+    {"type": "Feature", "id": "choke_beth_horon", "properties": {"name": "Beth-horon ascent", "kind": "pass", "defense_bonus": 5, "road_difficulty": 5, "confidence": "medium", "notes": "Major ascent from coastal lowlands toward Benjamin/Jerusalem."}, "geometry": {"type": "Point", "coordinates": [35.12, 31.88]}},
+    {"type": "Feature", "id": "choke_michmash", "properties": {"name": "Michmash pass", "kind": "pass", "defense_bonus": 5, "road_difficulty": 5, "confidence": "medium", "notes": "Narrow Benjaminite pass and tactical chokepoint."}, "geometry": {"type": "Point", "coordinates": [35.27, 31.87]}},
+    {"type": "Feature", "id": "choke_elah", "properties": {"name": "Elah Valley gate", "kind": "valley_gate", "defense_bonus": 3, "road_difficulty": 2, "confidence": "medium", "notes": "Philistia-Judah approach near Socoh/Azekah/Gath."}, "geometry": {"type": "Point", "coordinates": [34.95, 31.69]}},
+    {"type": "Feature", "id": "choke_sorek", "properties": {"name": "Sorek Valley approach", "kind": "valley_gate", "defense_bonus": 3, "road_difficulty": 3, "confidence": "medium", "notes": "Approach from Philistine lowlands toward the central ridge."}, "geometry": {"type": "Point", "coordinates": [34.90, 31.82]}},
+    {"type": "Feature", "id": "choke_lachish", "properties": {"name": "Lachish corridor", "kind": "fortress_corridor", "defense_bonus": 4, "road_difficulty": 3, "confidence": "high", "notes": "Southern Shephelah gateway toward Hebron and Beersheba."}, "geometry": {"type": "Point", "coordinates": [34.85, 31.56]}},
+    {"type": "Feature", "id": "choke_jericho_ascent", "properties": {"name": "Jericho ascent", "kind": "rift_ascent", "defense_bonus": 5, "road_difficulty": 5, "confidence": "medium", "notes": "Steep road from Jordan Rift into Benjamin/Jebus highlands."}, "geometry": {"type": "Point", "coordinates": [35.34, 31.84]}},
+    {"type": "Feature", "id": "choke_jordan_jericho_fords", "properties": {"name": "Jordan fords near Jericho", "kind": "ford", "defense_bonus": 3, "road_difficulty": 3, "confidence": "medium", "notes": "Cross-Jordan movement point near Jericho and the lower valley."}, "geometry": {"type": "Point", "coordinates": [35.52, 31.86]}},
+    {"type": "Feature", "id": "choke_beth_shean", "properties": {"name": "Beth-shean valley gate", "kind": "crossroads", "defense_bonus": 3, "road_difficulty": 2, "confidence": "high", "notes": "Controls Jezreel/Jordan transition."}, "geometry": {"type": "Point", "coordinates": [35.50, 32.50]}},
+    {"type": "Feature", "id": "choke_megiddo", "properties": {"name": "Megiddo pass", "kind": "crossroads_fortress", "defense_bonus": 5, "road_difficulty": 3, "confidence": "high", "notes": "Carmel/Jezreel road control point."}, "geometry": {"type": "Point", "coordinates": [35.18, 32.58]}},
+    {"type": "Feature", "id": "choke_arnon", "properties": {"name": "Arnon gorge crossing", "kind": "canyon_crossing", "defense_bonus": 5, "road_difficulty": 5, "confidence": "high", "notes": "Deep Moabite canyon crossing and boundary marker."}, "geometry": {"type": "Point", "coordinates": [35.70, 31.43]}},
+    {"type": "Feature", "id": "choke_zered", "properties": {"name": "Zered / Hasa crossing", "kind": "canyon_crossing", "defense_bonus": 5, "road_difficulty": 5, "confidence": "high", "notes": "Moab-Edom edge crossing."}, "geometry": {"type": "Point", "coordinates": [35.65, 30.90]}},
+    {"type": "Feature", "id": "choke_kadesh_barnea", "properties": {"name": "Kadesh-barnea oasis gate", "kind": "desert_water_chokepoint", "defense_bonus": 2, "road_difficulty": 5, "confidence": "medium", "notes": "Water-dependent desert route control point."}, "geometry": {"type": "Point", "coordinates": [34.47, 30.65]}},
+    {"type": "Feature", "id": "choke_en_gedi_cliffs", "properties": {"name": "En-gedi cliff refuge", "kind": "wilderness_refuge", "defense_bonus": 5, "road_difficulty": 5, "confidence": "high", "notes": "Spring and cliff refuge above the Dead Sea."}, "geometry": {"type": "Point", "coordinates": [35.39, 31.46]}}
+  ]
+}

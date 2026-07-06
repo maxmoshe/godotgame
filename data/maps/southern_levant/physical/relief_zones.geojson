@@ -1,0 +1,57 @@
+{
+  "type": "FeatureCollection",
+  "name": "Southern Levant relief abstraction",
+  "properties": {
+    "layer_type": "physical_relief",
+    "period": "all periods",
+    "crs": "EPSG:4326",
+    "source_notes": [
+      "Relief zones abstract lowlands, foothills, highlands, rift depression, and plateau for visual shading and movement rules.",
+      "Elevation bands are generalized from the major physiographic regions of Israel, Palestine, Jordan, Lebanon edge, and Sinai edge."
+    ]
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "relief_low_coast",
+      "properties": {"name": "Coastal lowlands", "kind": "elevation_zone", "elevation_band_m": "0-150", "shade_rank": 1, "confidence": "high"},
+      "geometry": {"type": "Polygon", "coordinates": [[[34.10, 33.80], [35.00, 33.75], [34.96, 32.70], [34.72, 31.95], [34.45, 31.52], [33.70, 31.10], [33.65, 34.60], [34.10, 33.80]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "relief_foothills",
+      "properties": {"name": "Foothills and rolling hills", "kind": "elevation_zone", "elevation_band_m": "150-450", "shade_rank": 2, "confidence": "high"},
+      "geometry": {"type": "Polygon", "coordinates": [[[34.86, 32.30], [35.10, 32.20], [35.12, 31.82], [35.05, 31.38], [34.90, 31.05], [34.63, 31.15], [34.45, 31.52], [34.72, 31.95], [34.86, 32.30]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "relief_central_ridge",
+      "properties": {"name": "Central mountain ridge", "kind": "elevation_zone", "elevation_band_m": "450-1000", "shade_rank": 4, "confidence": "high"},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.05, 32.55], [35.34, 32.55], [35.46, 32.05], [35.38, 31.70], [35.26, 31.20], [35.18, 30.80], [34.92, 30.95], [35.05, 31.38], [35.12, 31.82], [35.05, 32.55]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "relief_galilee_highlands",
+      "properties": {"name": "Galilee highlands", "kind": "elevation_zone", "elevation_band_m": "300-1200", "shade_rank": 4, "confidence": "high"},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.00, 33.75], [35.72, 34.55], [36.10, 33.95], [35.92, 33.25], [35.66, 32.95], [35.34, 32.55], [35.05, 32.55], [35.00, 33.75]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "relief_rift_depression",
+      "properties": {"name": "Jordan Rift depression", "kind": "elevation_zone", "elevation_band_m": "-430-0", "shade_rank": 0, "confidence": "high"},
+      "geometry": {"type": "Polygon", "coordinates": [[[35.46, 33.30], [35.82, 33.20], [35.78, 31.90], [35.70, 31.25], [35.46, 30.85], [35.18, 30.80], [35.26, 31.20], [35.38, 31.70], [35.46, 32.05], [35.34, 32.55], [35.46, 33.30]]]}
+    },
+    {
+      "type": "Feature",
+      "id": "ridge_central_watershed",
+      "properties": {"name": "Central watershed ridge", "kind": "ridge_line", "confidence": "medium"},
+      "geometry": {"type": "LineString", "coordinates": [[35.25, 32.35], [35.22, 32.10], [35.21, 31.88], [35.23, 31.78], [35.16, 31.53], [35.10, 31.30], [35.05, 31.00]]}
+    },
+    {
+      "type": "Feature",
+      "id": "ridge_transjordan",
+      "properties": {"name": "Transjordan plateau spine", "kind": "ridge_line", "confidence": "medium"},
+      "geometry": {"type": "LineString", "coordinates": [[35.90, 32.55], [35.88, 32.05], [35.80, 31.60], [35.72, 31.25], [35.65, 30.85], [35.55, 30.40]]}
+    }
+  ]
+}

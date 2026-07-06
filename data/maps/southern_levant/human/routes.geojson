@@ -1,0 +1,23 @@
+{
+  "type": "FeatureCollection",
+  "name": "Trade routes, roads, and campaign corridors",
+  "properties": {
+    "layer_type": "human_routes",
+    "period": "Iron Age / Saul-David era with all-period physical corridors",
+    "crs": "EPSG:4326",
+    "source_notes": [
+      "Routes are schematic campaign corridors, not surveyed road alignments.",
+      "Linework follows durable physical corridors: coast road, ridge road, Jordan valley, Jezreel, Shephelah valleys, wilderness tracks, and Transjordan plateau routes."
+    ]
+  },
+  "features": [
+    {"type": "Feature", "id": "route_coastal_via_maris", "properties": {"name": "Coastal trunk road / Via Maris corridor", "kind": "trade_route", "movement_cost_modifier": -0.3, "road_difficulty": 1, "supply_value": 4, "confidence": "medium", "notes": "Fast north-south coastal route linking Egypt, Philistia, Sharon, Carmel, and Phoenicia."}, "geometry": {"type": "LineString", "coordinates": [[33.82, 31.12], [34.47, 31.50], [34.56, 31.67], [34.65, 31.80], [34.78, 32.10], [34.93, 32.10], [35.00, 32.80], [35.19, 33.27], [35.37, 33.56]]}},
+    {"type": "Feature", "id": "route_central_ridge", "properties": {"name": "Central ridge road", "kind": "highland_route", "movement_cost_modifier": 0.2, "road_difficulty": 4, "supply_value": 3, "confidence": "medium", "notes": "Hebron-Bethlehem-Jebus/Benjamin-Shiloh-Shechem highland route."}, "geometry": {"type": "LineString", "coordinates": [[35.095, 31.532], [35.203, 31.705], [35.235, 31.777], [35.22, 31.83], [35.29, 32.05], [35.28, 32.21]]}},
+    {"type": "Feature", "id": "route_philistia_judah_valleys", "properties": {"name": "Philistia to Judah valley roads", "kind": "campaign_route", "movement_cost_modifier": 0.0, "road_difficulty": 2, "supply_value": 3, "confidence": "medium", "notes": "Shephelah east-west valleys toward Judah: Sorek, Elah, Lachish, and Guvrin style corridors."}, "geometry": {"type": "MultiLineString", "coordinates": [[[34.85, 31.70], [34.97, 31.69], [35.203, 31.705]], [[34.56, 31.67], [34.85, 31.56], [35.095, 31.532]], [[34.65, 31.80], [34.85, 31.87], [35.235, 31.777]]]}},
+    {"type": "Feature", "id": "route_jordan_valley", "properties": {"name": "Jordan Valley road", "kind": "rift_route", "movement_cost_modifier": -0.1, "road_difficulty": 3, "supply_value": 2, "confidence": "medium", "notes": "North-south rift movement from Kinneret/Beth-shean through Jericho to the Dead Sea basin."}, "geometry": {"type": "LineString", "coordinates": [[35.57, 32.82], [35.50, 32.50], [35.48, 32.16], [35.44, 31.87], [35.39, 31.46], [35.38, 31.02]]}},
+    {"type": "Feature", "id": "route_jericho_ascent", "properties": {"name": "Jericho to Benjamin/Jebus ascent", "kind": "pass_route", "movement_cost_modifier": 0.4, "road_difficulty": 5, "supply_value": 2, "confidence": "medium", "notes": "Steep ascent from the Rift to the Benjamin/Jerusalem ridge."}, "geometry": {"type": "LineString", "coordinates": [[35.44, 31.87], [35.34, 31.84], [35.25, 31.80], [35.235, 31.777]]}},
+    {"type": "Feature", "id": "route_kings_highway", "properties": {"name": "Transjordan plateau road / King's Highway corridor", "kind": "trade_route", "movement_cost_modifier": -0.1, "road_difficulty": 3, "supply_value": 3, "confidence": "medium", "notes": "Schematic plateau route through Ammon, Moab, and Edom edge."}, "geometry": {"type": "LineString", "coordinates": [[35.93, 31.95], [35.85, 31.70], [35.78, 31.50], [35.72, 31.15], [35.60, 30.73], [35.35, 30.25]]}},
+    {"type": "Feature", "id": "route_negev_wilderness", "properties": {"name": "Negev wilderness track", "kind": "wilderness_route", "movement_cost_modifier": 0.5, "road_difficulty": 5, "supply_value": 1, "confidence": "low", "notes": "Sparse-water southern track linking Hebron, Beersheba, Ziklag, Kadesh-barnea, and Sinai approaches."}, "geometry": {"type": "LineString", "coordinates": [[35.095, 31.532], [34.79, 31.25], [34.85, 31.38], [34.47, 30.65], [33.82, 31.12]]}},
+    {"type": "Feature", "id": "route_jezreel_crossroads", "properties": {"name": "Jezreel crossroads", "kind": "campaign_route", "movement_cost_modifier": -0.2, "road_difficulty": 2, "supply_value": 4, "confidence": "medium", "notes": "Carmel/Megiddo/Beth-shean corridor connecting coast, Galilee, and Jordan."}, "geometry": {"type": "LineString", "coordinates": [[35.00, 32.80], [35.18, 32.58], [35.33, 32.56], [35.50, 32.50]]}}
+  ]
+}

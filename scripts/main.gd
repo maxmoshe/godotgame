@@ -13,6 +13,12 @@ const ZOOM_MIN := 0.18
 const ZOOM_MAX := 1.2
 const ZOOM_STEP := 0.08
 const ZOOM_LERP_SPEED := 8.0
+const LOCATION_TOOLTIP_SIZE := Vector2(286.0, 96.0)
+const LOCATION_TOOLTIP_OFFSET := Vector2(18.0, 18.0)
+const LOCATION_TOOLTIP_MARGIN := 10.0
+const LOCATION_FORTRESS_KEYWORDS := ["fortress", "stronghold", "watch", "outpost"]
+const LOCATION_VILLAGE_KEYWORDS := ["village", "camp", "well", "spring", "oasis", "shrine", "mine", "copper", "clan", "house"]
+const LOCATION_CITY_KEYWORDS := ["city", "port", "capital", "court", "sanctuary"]
 const HIDE_MINUTES := 3 * 60
 const CHEAT_COMPANIONS := [
 	{"name": "Joab", "health": 120, "max_health": 120},
@@ -58,6 +64,10 @@ var _cheat_notice_label: Label
 var _cheat_companion_index := 0
 var _loot_panel_active := false
 var _loot_take_silver_button: Button
+var _location_tooltip: Panel
+var _location_tooltip_name_label: Label
+var _location_tooltip_type_label: Label
+var _location_tooltip_faction_label: Label
 
 
 func _ready() -> void:
@@ -72,6 +82,7 @@ func _ready() -> void:
 	party_panel.visible = false
 	_build_cheat_panel()
 	_build_loot_controls()
+	_build_location_tooltip()
 	dialogue_continue_button.pressed.connect(_advance_dialogue)
 	dialogue_recruit_button.pressed.connect(_recruit_soldiers)
 	dialogue_attack_button.pressed.connect(_start_lord_combat)
@@ -117,6 +128,7 @@ func _process(delta: float) -> void:
 			_show_dialogue(_pending_encounter)
 
 	_update_location_label(false)
+	_update_location_tooltip()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -300,6 +312,153 @@ func _update_status_label() -> void:
 		status += "\n%s" % GameState.last_campaign_notice
 	status_label.text = status
 	status_label.modulate = Color("#ffb09c") if GameState.food <= 2 or GameState.morale <= 25 else Color.WHITE
+
+
+func _build_location_tooltip() -> void:
+	_location_tooltip = Panel.new()
+	_location_tooltip.name = "LocationTooltip"
+	_location_tooltip.visible = false
+	_location_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_location_tooltip.size = LOCATION_TOOLTIP_SIZE
+	_location_tooltip.add_theme_stylebox_override("panel", _make_location_tooltip_style())
+	hud.add_child(_location_tooltip)
+
+	_location_tooltip_name_label = _make_location_tooltip_label(14.0, 22, Color("#f4dfaa"))
+	_location_tooltip_type_label = _make_location_tooltip_label(46.0, 16, Color("#e0c88f"))
+	_location_tooltip_faction_label = _make_location_tooltip_label(68.0, 16, Color("#cdb989"))
+	_location_tooltip.add_child(_location_tooltip_name_label)
+	_location_tooltip.add_child(_location_tooltip_type_label)
+	_location_tooltip.add_child(_location_tooltip_faction_label)
+
+
+func _make_location_tooltip_label(top: float, font_size: int, color: Color) -> Label:
+	var label := Label.new()
+	label.offset_left = 14.0
+	label.offset_top = top
+	label.offset_right = LOCATION_TOOLTIP_SIZE.x - 14.0
+	label.offset_bottom = top + 24.0
+	label.add_theme_font_size_override("font_size", font_size)
+	label.add_theme_color_override("font_color", color)
+	return label
+
+
+func _make_location_tooltip_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.10, 0.075, 0.045, 0.94)
+	style.border_color = Color("#d0a65c")
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	return style
+
+
+func _update_location_tooltip() -> void:
+	var viewport := get_viewport()
+	if viewport == null:
+		_hide_location_tooltip()
+		return
+
+	if _should_hide_location_tooltip():
+		_hide_location_tooltip()
+		return
+
+	var location: Dictionary = campaign_map.get_hovered_location(get_global_mouse_position())
+	if location.is_empty():
+		_hide_location_tooltip()
+		return
+
+	_render_location_tooltip(location)
+	_position_location_tooltip(viewport.get_mouse_position())
+	_location_tooltip.visible = true
+
+
+func _render_location_tooltip(location: Dictionary) -> void:
+	_location_tooltip_name_label.text = String(location.get("name", "Unknown location"))
+	_location_tooltip_type_label.text = "Type: %s" % _location_type_for(location)
+	_location_tooltip_faction_label.text = "Faction: %s" % _location_faction_for(location)
+
+
+func _position_location_tooltip(mouse_position: Vector2) -> void:
+	var viewport_size := get_viewport_rect().size
+	var tooltip_size := LOCATION_TOOLTIP_SIZE
+	var tooltip_position := mouse_position + LOCATION_TOOLTIP_OFFSET
+
+	if tooltip_position.x + tooltip_size.x > viewport_size.x - LOCATION_TOOLTIP_MARGIN:
+		tooltip_position.x = mouse_position.x - tooltip_size.x - LOCATION_TOOLTIP_OFFSET.x
+	if tooltip_position.y + tooltip_size.y > viewport_size.y - LOCATION_TOOLTIP_MARGIN:
+		tooltip_position.y = mouse_position.y - tooltip_size.y - LOCATION_TOOLTIP_OFFSET.y
+
+	tooltip_position.x = clampf(
+		tooltip_position.x,
+		LOCATION_TOOLTIP_MARGIN,
+		maxf(LOCATION_TOOLTIP_MARGIN, viewport_size.x - tooltip_size.x - LOCATION_TOOLTIP_MARGIN)
+	)
+	tooltip_position.y = clampf(
+		tooltip_position.y,
+		LOCATION_TOOLTIP_MARGIN,
+		maxf(LOCATION_TOOLTIP_MARGIN, viewport_size.y - tooltip_size.y - LOCATION_TOOLTIP_MARGIN)
+	)
+	_location_tooltip.position = tooltip_position
+
+
+func _location_type_for(location: Dictionary) -> String:
+	var explicit_label := String(location.get("location_class_label", "")).strip_edges()
+	if not explicit_label.is_empty():
+		return explicit_label
+
+	var settlement_class := String(location.get("settlement_class", "")).strip_edges()
+	if not settlement_class.is_empty():
+		return _title_from_snake_case(settlement_class)
+
+	var kind := String(location.get("kind", "")).to_lower()
+	for keyword in LOCATION_FORTRESS_KEYWORDS:
+		if kind.contains(String(keyword)):
+			return "Fortress"
+	for keyword in LOCATION_VILLAGE_KEYWORDS:
+		if kind.contains(String(keyword)):
+			return "Village"
+	for keyword in LOCATION_CITY_KEYWORDS:
+		if kind.contains(String(keyword)):
+			return "City"
+
+	var defense_bonus := int(location.get("defense_bonus", 0))
+	var density := int(location.get("settlement_density", 0))
+	if defense_bonus >= 5 and density <= 4:
+		return "Fortress"
+	if kind.contains("town") and density <= 3:
+		return "Town"
+	if density > 0 and density <= 2:
+		return "Village"
+	return "City"
+
+
+func _title_from_snake_case(value: String) -> String:
+	var words := value.split("_", false)
+	for index in range(words.size()):
+		var word := String(words[index])
+		if word.is_empty():
+			continue
+		words[index] = word.substr(0, 1).to_upper() + word.substr(1)
+	return " ".join(words)
+
+
+func _location_faction_for(location: Dictionary) -> String:
+	var faction := String(location.get("owner_faction", "")).strip_edges()
+	if faction.is_empty() or faction == "Neutral":
+		return "No controlling faction"
+	return faction
+
+
+func _should_hide_location_tooltip() -> bool:
+	return dialogue_panel.visible \
+		or _is_pointer_over_inventory() \
+		or _is_pointer_over_market() \
+		or _is_pointer_over_party() \
+		or _is_pointer_over_cheat_panel()
+
+
+func _hide_location_tooltip() -> void:
+	if _location_tooltip != null:
+		_location_tooltip.visible = false
 
 
 func _build_cheat_panel() -> void:
@@ -512,6 +671,7 @@ func _format_signed_amount(amount: int) -> String:
 
 
 func _show_dialogue(target: Dictionary) -> void:
+	_hide_location_tooltip()
 	dialogue_title.text = _dialogue_title_for(target)
 	_dialogue_target = target.duplicate()
 	_maybe_complete_ziklag_objective(_dialogue_target)

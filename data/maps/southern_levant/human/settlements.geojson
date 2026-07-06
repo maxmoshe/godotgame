@@ -1,0 +1,2490 @@
+{
+  "type": "FeatureCollection",
+  "name": "Iron Age settlements and strongholds",
+  "properties": {
+    "layer_type": "human_settlements",
+    "period": "Iron Age / Saul-David era with later-reference notes",
+    "crs": "EPSG:4326",
+    "source_notes": [
+      "Coordinates are modern approximate site coordinates or conventional identifications suitable for campaign-map play.",
+      "Ancient identifications range from secure archaeological sites to debated biblical toponyms; use confidence per feature."
+    ],
+    "classification_schema": {
+      "settlement_class": "Physical/gameplay class of the location; independent of owner_faction.",
+      "site_role": "Array of strategic, economic, religious, or historical roles used by gameplay.",
+      "fortification_level": "0-5 abstraction: 0 none/unknown, 5 major fortified city or stronghold.",
+      "classification_confidence": "high / medium / low confidence in this class for the primary Iron Age layer.",
+      "location_class_label": "Short UI label; Godot should prefer this over keyword inference from kind."
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "gibeah",
+      "properties": {
+        "name": "Gibeah",
+        "kind": "Saul's court",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "House of Saul",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 3,
+        "defense_bonus": 4,
+        "settlement_density": 4,
+        "notes": "Benjaminite hill stronghold associated with Saul.",
+        "settlement_class": "fortified_town",
+        "site_role": [
+          "royal_court",
+          "tribal_stronghold"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "medium",
+        "location_class_label": "Fortified Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.22,
+          31.83
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ramah",
+      "properties": {
+        "name": "Ramah",
+        "kind": "Prophet's town",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Benjamin",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 3,
+        "defense_bonus": 3,
+        "settlement_density": 3,
+        "notes": "Traditional home region of Samuel in Benjaminite highlands.",
+        "settlement_class": "town",
+        "site_role": [
+          "prophetic_center",
+          "highland_node"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "medium",
+        "location_class_label": "Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.2,
+          31.86
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "nob",
+      "properties": {
+        "name": "Nob",
+        "kind": "Priestly town",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Priestly",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 2,
+        "notes": "Location debated; placed near Jerusalem/Benjamin edge for gameplay.",
+        "settlement_class": "village",
+        "site_role": [
+          "priestly_center"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "low",
+        "location_class_label": "Priestly Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.25,
+          31.8
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "jebus_jerusalem",
+      "properties": {
+        "name": "Jebus",
+        "kind": "Fortress",
+        "era_tags": [
+          "bronze_age",
+          "iron_age",
+          "hasmonean"
+        ],
+        "owner_faction": "Jebus",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 5,
+        "defense_bonus": 5,
+        "settlement_density": 5,
+        "notes": "Jerusalem/Jebus ridge with Gihon spring and strong defensive value.",
+        "settlement_class": "fortified_city",
+        "site_role": [
+          "fortress",
+          "spring_control",
+          "urban_center"
+        ],
+        "fortification_level": 5,
+        "classification_confidence": "high",
+        "location_class_label": "Fortified City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.235,
+          31.777
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bethlehem",
+      "properties": {
+        "name": "Bethlehem",
+        "kind": "House of Jesse",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Judah",
+        "confidence": "high",
+        "supply_value": 3,
+        "water_access": 3,
+        "defense_bonus": 3,
+        "settlement_density": 3,
+        "notes": "Judahite hill-country town associated with David's family.",
+        "settlement_class": "town",
+        "site_role": [
+          "kinship_center",
+          "agricultural_highland"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.203,
+          31.705
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "hebron",
+      "properties": {
+        "name": "Hebron",
+          "kind": "Major fortified town",
+        "era_tags": [
+          "bronze_age",
+          "iron_age",
+          "hasmonean"
+        ],
+        "owner_faction": "Judah",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 3,
+        "defense_bonus": 5,
+        "settlement_density": 4,
+          "notes": "Major southern highland center and early Davidic capital; better treated as a fortified town/urban center than a castle.",
+        "settlement_class": "major_fortified_town",
+        "site_role": [
+          "southern_highland_center",
+          "early_davidic_capital",
+          "route_node"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "high",
+        "location_class_label": "Major Fortified Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.095,
+          31.532
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "keilah",
+      "properties": {
+        "name": "Keilah",
+        "kind": "Border town",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Judah",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 3,
+        "notes": "Judah-Shephelah border town, useful for refuge and raids.",
+        "settlement_class": "fortified_town",
+        "site_role": [
+          "border_town",
+          "shephelah_gateway"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "medium",
+        "location_class_label": "Fortified Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.98,
+          31.6
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "socoh",
+      "properties": {
+        "name": "Socoh",
+        "kind": "Valley town",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Judah",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 2,
+        "settlement_density": 3,
+        "notes": "Elah Valley town near the Philistine-Judah conflict corridor.",
+        "settlement_class": "town",
+        "site_role": [
+          "valley_market",
+          "campaign_corridor"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.97,
+          31.69
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "azekah",
+      "properties": {
+        "name": "Azekah",
+        "kind": "Shephelah fortress",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Judah",
+        "confidence": "high",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "notes": "Fortified site overlooking the Elah corridor.",
+        "settlement_class": "fortress_town",
+        "site_role": [
+          "watchpoint",
+          "elah_corridor_control"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "high",
+        "location_class_label": "Fortress Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.92,
+          31.7
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "lachish",
+      "properties": {
+        "name": "Lachish",
+        "kind": "Fortress city",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Judah",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 2,
+        "defense_bonus": 5,
+        "settlement_density": 4,
+        "notes": "Major fortified city guarding the southern Shephelah.",
+        "settlement_class": "fortified_city",
+        "site_role": [
+          "shephelah_admin_center",
+          "fortress"
+        ],
+        "fortification_level": 5,
+        "classification_confidence": "high",
+        "location_class_label": "Fortified City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.85,
+          31.56
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ziklag",
+      "properties": {
+        "name": "Ziklag",
+        "kind": "David's refuge",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "David's Band",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 1,
+        "defense_bonus": 2,
+        "settlement_density": 2,
+        "notes": "Identification debated; placed in the southern borderland for prototype gameplay.",
+        "settlement_class": "frontier_town",
+        "site_role": [
+          "refuge",
+          "borderland_base"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "low",
+        "location_class_label": "Frontier Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.85,
+          31.38
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "en_gedi",
+      "properties": {
+        "name": "En-gedi",
+        "kind": "Wilderness spring",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Wilderness",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 5,
+        "defense_bonus": 4,
+        "settlement_density": 1,
+        "notes": "Dead Sea oasis and refuge zone.",
+        "settlement_class": "oasis_refuge",
+        "site_role": [
+          "spring",
+          "wilderness_refuge"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Oasis Refuge"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.39,
+          31.46
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "gath",
+      "properties": {
+        "name": "Gath",
+        "kind": "Philistine city",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Philistine Lords",
+        "confidence": "medium",
+        "supply_value": 5,
+        "water_access": 3,
+        "defense_bonus": 4,
+        "settlement_density": 5,
+        "notes": "Conventionally identified with Tell es-Safi; major Philistine center.",
+        "settlement_class": "city_state",
+        "site_role": [
+          "philistine_capital",
+          "lowland_power_center"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "medium",
+        "location_class_label": "City-State"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.85,
+          31.7
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ashkelon",
+      "properties": {
+        "name": "Ashkelon",
+        "kind": "Philistine port",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Philistine Lords",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 4,
+        "defense_bonus": 3,
+        "settlement_density": 5,
+        "notes": "Coastal city with port and trade value.",
+        "settlement_class": "port_city",
+        "site_role": [
+          "philistine_capital",
+          "maritime_trade"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "Port City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.56,
+          31.67
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "gaza",
+      "properties": {
+        "name": "Gaza",
+        "kind": "Philistine port",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Philistine Lords",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 3,
+        "defense_bonus": 3,
+        "settlement_density": 5,
+        "notes": "Southern coastal hub and Egypt-road gateway.",
+        "settlement_class": "port_city",
+        "site_role": [
+          "philistine_capital",
+          "egypt_road_gateway"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "Port City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.47,
+          31.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ashdod",
+      "properties": {
+        "name": "Ashdod",
+        "kind": "Philistine city",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Philistine Lords",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 3,
+        "defense_bonus": 3,
+        "settlement_density": 5,
+        "notes": "One of the Philistine pentapolis centers.",
+        "settlement_class": "city_state",
+        "site_role": [
+          "philistine_capital"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "City-State"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.65,
+          31.8
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ekron",
+      "properties": {
+        "name": "Ekron",
+        "kind": "Philistine city",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Philistine Lords",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 3,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "notes": "Inland Philistine center near the Shephelah edge.",
+        "settlement_class": "city_state",
+        "site_role": [
+          "philistine_capital",
+          "lowland_market"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "City-State"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.85,
+          31.87
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "aphek",
+      "properties": {
+        "name": "Aphek",
+        "kind": "Northern road",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Contested",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 4,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "notes": "Road and water chokepoint near the Yarqon springs/Antipatris area.",
+        "settlement_class": "fortified_town",
+        "site_role": [
+          "road_water_chokepoint",
+          "yarqon_springs"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "Fortified Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.93,
+          32.1
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "shiloh",
+      "properties": {
+        "name": "Shiloh",
+        "kind": "Old sanctuary",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Ephraim",
+        "confidence": "high",
+        "supply_value": 3,
+        "water_access": 3,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "notes": "Highland sanctuary site north of Benjamin.",
+        "settlement_class": "sanctuary_town",
+        "site_role": [
+          "cult_center",
+          "highland_node"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "Sanctuary Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.29,
+          32.05
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "gilboa",
+      "properties": {
+        "name": "Gilboa",
+        "kind": "Northern highlands",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "House of Saul",
+        "confidence": "medium",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 5,
+        "settlement_density": 2,
+        "notes": "Strategic ridge above Jezreel and Beth-shean routes.",
+        "settlement_class": "ridge_landmark",
+        "site_role": [
+          "battlefield",
+          "highland_chokepoint"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "medium",
+        "location_class_label": "Ridge Landmark"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.42,
+          32.48
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "shechem",
+      "properties": {
+        "name": "Shechem",
+        "kind": "Highland city",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Ephraim",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 4,
+        "defense_bonus": 5,
+        "settlement_density": 5,
+        "notes": "Major central highland city between Mount Gerizim and Mount Ebal.",
+        "settlement_class": "major_city",
+        "site_role": [
+          "central_highland_center",
+          "pass_control"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "high",
+        "location_class_label": "Major City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.28,
+          32.21
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "beth_shean",
+      "properties": {
+        "name": "Beth-shean",
+        "kind": "Valley city",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Contested",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 4,
+        "defense_bonus": 3,
+        "settlement_density": 5,
+        "notes": "Key Jezreel-Jordan valley node.",
+        "settlement_class": "city",
+        "site_role": [
+          "valley_crossroads",
+          "jordan_jezreel_gate"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.5,
+          32.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "jericho",
+      "properties": {
+        "name": "Jericho",
+        "kind": "Oasis city",
+        "era_tags": [
+          "bronze_age",
+          "iron_age",
+          "hasmonean"
+        ],
+        "owner_faction": "Jordan Rift",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 5,
+        "defense_bonus": 2,
+        "settlement_density": 4,
+        "notes": "Major oasis and ascent point to Benjamin/Jerusalem.",
+        "settlement_class": "oasis_city",
+        "site_role": [
+          "oasis",
+          "rift_ascent_node"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Oasis City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.44,
+          31.87
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "hazor",
+      "properties": {
+        "name": "Hazor",
+        "kind": "Northern city",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Galilee",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 4,
+        "defense_bonus": 4,
+        "settlement_density": 4,
+        "notes": "Major northern site near Hula and upper Jordan routes.",
+        "settlement_class": "major_city",
+        "site_role": [
+          "northern_center",
+          "upper_jordan_node"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "high",
+        "location_class_label": "Major City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.57,
+          33.02
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "dan",
+      "properties": {
+        "name": "Dan",
+        "kind": "Northern spring city",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Northern Israel",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 5,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "notes": "Upper Jordan spring source and northern gate.",
+        "settlement_class": "spring_town",
+        "site_role": [
+          "spring_source",
+          "northern_gate"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Spring Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.65,
+          33.25
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "tyre",
+      "properties": {
+        "name": "Tyre",
+        "kind": "Phoenician port",
+        "era_tags": [
+          "iron_age",
+          "hasmonean"
+        ],
+        "owner_faction": "Phoenician Coast",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 5,
+        "defense_bonus": 4,
+        "settlement_density": 5,
+        "notes": "Northern maritime power edge.",
+        "settlement_class": "port_city",
+        "site_role": [
+          "phoenician_power_center",
+          "maritime_trade"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "high",
+        "location_class_label": "Port City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.19,
+          33.27
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "rabbah_ammon",
+      "properties": {
+        "name": "Rabbah",
+        "kind": "Ammonite capital",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Ammon",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 3,
+        "defense_bonus": 4,
+        "settlement_density": 5,
+        "notes": "Ammonite center at modern Amman.",
+        "settlement_class": "capital_city",
+        "site_role": [
+          "ammonite_capital"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "high",
+        "location_class_label": "Capital City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.93,
+          31.95
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "dibon",
+      "properties": {
+        "name": "Dibon",
+        "kind": "Moabite city",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Moab",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 2,
+        "defense_bonus": 4,
+        "settlement_density": 4,
+        "notes": "Moabite plateau city, important in later Mesha context.",
+        "settlement_class": "city",
+        "site_role": [
+          "moabite_plateau_center"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.78,
+          31.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "bozrah",
+      "properties": {
+        "name": "Bozrah",
+        "kind": "Edomite city edge",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Edom edge",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "notes": "Northern Edomite/Seir edge marker.",
+        "settlement_class": "fortified_town",
+        "site_role": [
+          "edomite_edge",
+          "highland_route"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "medium",
+        "location_class_label": "Fortified Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.6,
+          30.73
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "beersheba",
+      "properties": {
+        "name": "Beersheba",
+        "kind": "Negev town",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Judah / Negev",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 4,
+        "defense_bonus": 3,
+        "settlement_density": 3,
+        "notes": "Southern water and administration node.",
+        "settlement_class": "town",
+        "site_role": [
+          "well_center",
+          "southern_admin_node"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.79,
+          31.25
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "kadesh_barnea",
+      "properties": {
+        "name": "Kadesh-barnea",
+          "kind": "Oasis outpost",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Sinai / Negev",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 4,
+        "defense_bonus": 2,
+        "settlement_density": 1,
+          "notes": "Important southern oasis zone and frontier marker; modeled as a water-dependent oasis outpost rather than a normal village.",
+        "settlement_class": "oasis_outpost",
+        "site_role": [
+          "oasis",
+          "desert_route_gate",
+          "iron_age_fortress_layer"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "medium",
+        "location_class_label": "Oasis Outpost"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.47,
+          30.65
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "heshbon",
+      "properties": {
+        "name": "Heshbon",
+        "kind": "Plateau town",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Ammon",
+        "confidence": "medium",
+        "supply_value": 4,
+        "water_access": 3,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "label_tier": "regional",
+        "notes": "Transjordan plateau town placed as an Ammon-Moab border hub for gameplay.",
+        "settlement_class": "plateau_town",
+        "site_role": [
+          "transjordan_market",
+          "border_hub"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "medium",
+        "location_class_label": "Plateau Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.8,
+          31.8
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "jazer",
+      "properties": {
+        "name": "Jazer",
+        "kind": "Vine village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Ammon",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 3,
+        "defense_bonus": 2,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Fertile Gilead-edge village; identification varies, placed west of Rabbah for map play.",
+        "settlement_class": "village",
+        "site_role": [
+          "vineyard",
+          "rural_supply"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.82,
+          31.99
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "minnith",
+      "properties": {
+        "name": "Minnith",
+        "kind": "Grain village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Ammon",
+        "confidence": "low",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 2,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Ammonite wheat-growing place known from textual references; location is approximate.",
+        "settlement_class": "village",
+        "site_role": [
+          "grain_supply"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "low",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          36.03,
+          31.85
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "abel_keramim",
+      "properties": {
+        "name": "Abel-keramim",
+        "kind": "Vineyard village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Ammon",
+        "confidence": "low",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 2,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Ammonite vineyard settlement placed south of Rabbah as a rural supply point.",
+        "settlement_class": "village",
+        "site_role": [
+          "vineyard",
+          "rural_supply"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "low",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.96,
+          31.76
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "jogbehah",
+      "properties": {
+        "name": "Jogbehah",
+        "kind": "Hill village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Ammon",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Gilead highland village placed between Rabbah and the northern approaches.",
+        "settlement_class": "village",
+        "site_role": [
+          "hill_watch",
+          "rural_supply"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "low",
+        "location_class_label": "Hill Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.89,
+          32.05
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "aroer_ammon",
+      "properties": {
+        "name": "Aroer of Ammon",
+        "kind": "Border village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Ammon",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Eastern Ammonite border point used to make the Rabbah hinterland feel settled.",
+        "settlement_class": "border_village",
+        "site_role": [
+          "border_watch"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "low",
+        "location_class_label": "Border Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          36.06,
+          31.92
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "medeba",
+      "properties": {
+        "name": "Medeba",
+        "kind": "Moabite plateau town",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Moab",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 3,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "label_tier": "regional",
+        "notes": "Central plateau town north of Dibon, useful as Moab's northern market node.",
+        "settlement_class": "plateau_town",
+        "site_role": [
+          "moabite_market"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Plateau Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.79,
+          31.72
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "nebo",
+      "properties": {
+        "name": "Nebo",
+        "kind": "Ridge shrine",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Moab",
+        "confidence": "medium",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 4,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Moabite ridge settlement and shrine zone overlooking the Jordan approaches.",
+        "settlement_class": "shrine_village",
+        "site_role": [
+          "ridge_shrine",
+          "lookout"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "medium",
+        "location_class_label": "Shrine Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.73,
+          31.77
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "baal_meon",
+      "properties": {
+        "name": "Baal-meon",
+        "kind": "Cult village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Moab",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 2,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Moabite plateau village set between Medeba and Dibon.",
+        "settlement_class": "village",
+        "site_role": [
+          "cult_site",
+          "rural_supply"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.73,
+          31.68
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ataroth_moab",
+      "properties": {
+        "name": "Ataroth",
+        "kind": "Moabite village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Moab",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Moabite plateau village placed north of the Arnon corridor.",
+        "settlement_class": "village",
+        "site_role": [
+          "rural_supply",
+          "plateau_waypoint"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "medium",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.74,
+          31.59
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "aroer_arnon",
+      "properties": {
+        "name": "Aroer",
+        "kind": "Arnon watch",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Moab",
+        "confidence": "medium",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 4,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Settlement above the Arnon gorge, guarding the north-south plateau road.",
+        "settlement_class": "watch_village",
+        "site_role": [
+          "gorge_watch",
+          "border_control"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "medium",
+        "location_class_label": "Watch Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.82,
+          31.46
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ar_moab",
+      "properties": {
+        "name": "Ar",
+        "kind": "Moabite town",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Moab",
+        "confidence": "low",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Traditional Moabite town name placed on the central plateau for density and route play.",
+        "settlement_class": "town",
+        "site_role": [
+          "moabite_plateau_node"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "low",
+        "location_class_label": "Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.74,
+          31.31
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "kir_hareseth",
+      "properties": {
+        "name": "Kir-hareseth",
+        "kind": "Moabite stronghold",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Moab",
+        "confidence": "medium",
+        "supply_value": 4,
+        "water_access": 2,
+        "defense_bonus": 5,
+        "settlement_density": 4,
+        "label_tier": "regional",
+        "notes": "Southern Moabite fortress, conventionally associated with the Karak highland area.",
+        "settlement_class": "fortress_town",
+        "site_role": [
+          "moabite_stronghold"
+        ],
+        "fortification_level": 5,
+        "classification_confidence": "medium",
+        "location_class_label": "Fortress Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.7,
+          31.18
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "sela",
+      "properties": {
+        "name": "Sela",
+        "kind": "Edomite rock town",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Edom edge",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 5,
+        "settlement_density": 3,
+        "label_tier": "regional",
+        "notes": "Rocky Edomite stronghold marker in the Seir highland approaches.",
+        "settlement_class": "rock_stronghold",
+        "site_role": [
+          "edomite_stronghold",
+          "desert_highland_refuge"
+        ],
+        "fortification_level": 5,
+        "classification_confidence": "medium",
+        "location_class_label": "Rock Stronghold"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.44,
+          30.33
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "teman",
+      "properties": {
+        "name": "Teman",
+        "kind": "Edomite village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Edom edge",
+        "confidence": "low",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Southern Edomite village marker; location is approximate for campaign-scale play.",
+        "settlement_class": "village",
+        "site_role": [
+          "edomite_rural_node"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "low",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.57,
+          30.5
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "punon",
+      "properties": {
+        "name": "Punon",
+        "kind": "Copper camp",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Edom edge",
+        "confidence": "medium",
+        "supply_value": 2,
+        "water_access": 1,
+        "defense_bonus": 2,
+        "settlement_density": 1,
+        "label_tier": "minor",
+        "notes": "Arabah copper-working zone placed near Faynan for trade and raiding hooks.",
+        "settlement_class": "mine_camp",
+        "site_role": [
+          "copper_working",
+          "arabah_industry"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Mine Camp"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.45,
+          30.63
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "tawilan",
+      "properties": {
+        "name": "Tawilan",
+        "kind": "Seir village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Edom edge",
+        "confidence": "medium",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Edomite highland village near the Petra basin, useful as a southern patrol stop.",
+        "settlement_class": "village",
+        "site_role": [
+          "seir_highland_waypoint"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "medium",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.48,
+          30.38
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "seir_camp",
+      "properties": {
+        "name": "Seir Camp",
+        "kind": "Clan camp",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Edom edge",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 1,
+        "defense_bonus": 3,
+        "settlement_density": 1,
+        "label_tier": "minor",
+        "notes": "Nomadic Edomite camp added to break up the empty Seir ridges.",
+        "settlement_class": "clan_camp",
+        "site_role": [
+          "pastoral_camp"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "low",
+        "location_class_label": "Clan Camp"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.36,
+          30.72
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "timna_copper",
+      "properties": {
+        "name": "Timna Copper Camp",
+        "kind": "Mine camp",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Edom edge",
+        "confidence": "medium",
+        "supply_value": 2,
+        "water_access": 1,
+        "defense_bonus": 2,
+        "settlement_density": 1,
+        "label_tier": "minor",
+        "notes": "Southern copper district marker at the edge of the playable desert.",
+        "settlement_class": "mine_camp",
+        "site_role": [
+          "copper_working"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Mine Camp"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.99,
+          29.79
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "sidon",
+      "properties": {
+        "name": "Sidon",
+        "kind": "Phoenician port",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Phoenician Coast",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 5,
+        "defense_bonus": 3,
+        "settlement_density": 5,
+        "label_tier": "regional",
+        "notes": "Northern Phoenician port added above Tyre to make the coast feel like a real maritime corridor.",
+        "settlement_class": "port_city",
+        "site_role": [
+          "phoenician_power_center",
+          "maritime_trade"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "Port City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.37,
+          33.56
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "sarepta",
+      "properties": {
+        "name": "Sarepta",
+        "kind": "Phoenician village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Phoenician Coast",
+        "confidence": "high",
+        "supply_value": 3,
+        "water_access": 4,
+        "defense_bonus": 2,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Coastal village between Tyre and Sidon, useful for trade-road density.",
+        "settlement_class": "coastal_village",
+        "site_role": [
+          "coastal_trade"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "high",
+        "location_class_label": "Coastal Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.31,
+          33.45
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "achzib",
+      "properties": {
+        "name": "Achzib",
+        "kind": "Phoenician coast town",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Phoenician Coast",
+        "confidence": "high",
+        "supply_value": 3,
+        "water_access": 4,
+        "defense_bonus": 3,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Fortified coastal site north of Akko, outside the Israelite core.",
+        "settlement_class": "coastal_town",
+        "site_role": [
+          "coastal_watch",
+          "maritime_waypoint"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Coastal Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.1,
+          33.05
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "akko",
+      "properties": {
+        "name": "Akko",
+        "kind": "Coastal port",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Phoenician Coast",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 5,
+        "defense_bonus": 3,
+        "settlement_density": 5,
+        "label_tier": "minor",
+        "notes": "Harbor town on the northern coastal road, kept Phoenician/neutral for this prototype layer.",
+        "settlement_class": "port_city",
+        "site_role": [
+          "harbor",
+          "coastal_trade"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "high",
+        "location_class_label": "Port City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.08,
+          32.92
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "dor",
+      "properties": {
+        "name": "Dor",
+        "kind": "Coastal town",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Phoenician Coast",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 5,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "label_tier": "minor",
+        "notes": "Southern coastal town added as a non-Philistine maritime waypoint.",
+        "settlement_class": "port_town",
+        "site_role": [
+          "harbor",
+          "coastal_trade"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Port Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.92,
+          32.61
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "damascus",
+      "properties": {
+        "name": "Damascus",
+        "kind": "Aramean city",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Aram-Damascus",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 5,
+        "defense_bonus": 4,
+        "settlement_density": 5,
+        "label_tier": "regional",
+        "notes": "Aramean power center on the northeast edge of the campaign map.",
+        "settlement_class": "capital_city",
+        "site_role": [
+          "aramean_capital",
+          "oasis_city"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "high",
+        "location_class_label": "Capital City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          36.29,
+          33.51
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "abel_beth_maacah",
+      "properties": {
+        "name": "Abel-beth-maacah",
+        "kind": "Border town",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Geshur",
+        "confidence": "high",
+        "supply_value": 4,
+        "water_access": 4,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "label_tier": "minor",
+        "notes": "Northern border town placed in the Aram/Geshur/Maacah frontier belt.",
+        "settlement_class": "border_town",
+        "site_role": [
+          "northern_border",
+          "road_node"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "high",
+        "location_class_label": "Border Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.58,
+          33.27
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "geshur",
+      "properties": {
+        "name": "Geshur",
+        "kind": "Highland town",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Geshur",
+        "confidence": "low",
+        "supply_value": 3,
+        "water_access": 3,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "label_tier": "regional",
+        "notes": "Small Aramean kingdom marker east of the upper Jordan and Sea of Galilee.",
+        "settlement_class": "highland_town",
+        "site_role": [
+          "small_kingdom_center"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "low",
+        "location_class_label": "Highland Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.79,
+          32.9
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "ashtaroth",
+      "properties": {
+        "name": "Ashtaroth",
+        "kind": "Bashan town",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Bashan",
+        "confidence": "medium",
+        "supply_value": 4,
+        "water_access": 3,
+        "defense_bonus": 3,
+        "settlement_density": 4,
+        "label_tier": "minor",
+        "notes": "Bashan town on the northern Transjordan road network.",
+        "settlement_class": "town",
+        "site_role": [
+          "bashan_road_node"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "medium",
+        "location_class_label": "Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          36.02,
+          32.8
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "edrei",
+      "properties": {
+        "name": "Edrei",
+        "kind": "Bashan fortress",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Bashan",
+        "confidence": "medium",
+        "supply_value": 4,
+        "water_access": 3,
+        "defense_bonus": 4,
+        "settlement_density": 4,
+        "label_tier": "minor",
+        "notes": "Bashan stronghold placed near the eastern road edge.",
+        "settlement_class": "fortress_town",
+        "site_role": [
+          "bashan_stronghold"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "medium",
+        "location_class_label": "Fortress Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          36.1,
+          32.62
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "salecah",
+      "properties": {
+        "name": "Salecah",
+        "kind": "Eastern fortress",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Bashan",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 4,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Far eastern Bashan marker on the edge of the playable map.",
+        "settlement_class": "fortress_outpost",
+        "site_role": [
+          "eastern_edge_watch"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "medium",
+        "location_class_label": "Fortress Outpost"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          36.7,
+          32.49
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "abel_shittim",
+      "properties": {
+        "name": "Abel-shittim",
+        "kind": "Rift village",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Jordan Rift",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 4,
+        "defense_bonus": 2,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Jordan plain village east of Jericho, useful as a crossing-side waypoint.",
+        "settlement_class": "village",
+        "site_role": [
+          "rift_waypoint"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.58,
+          31.86
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "adam",
+      "properties": {
+        "name": "Adam",
+        "kind": "River crossing",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Jordan Rift",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 5,
+        "defense_bonus": 2,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Jordan crossing settlement, placed to make the river road less empty.",
+        "settlement_class": "crossing_settlement",
+        "site_role": [
+          "jordan_ford",
+          "river_crossing"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Crossing Settlement"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.56,
+          32.1
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "succoth",
+      "properties": {
+        "name": "Succoth",
+        "kind": "Valley village",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Jordan Rift",
+        "confidence": "medium",
+        "supply_value": 4,
+        "water_access": 4,
+        "defense_bonus": 2,
+        "settlement_density": 4,
+        "label_tier": "minor",
+        "notes": "Jordan valley settlement near the Jabbok approaches.",
+        "settlement_class": "valley_town",
+        "site_role": [
+          "jordan_valley_supply",
+          "jabbok_approach"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Valley Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.62,
+          32.2
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "penuel",
+      "properties": {
+        "name": "Penuel",
+        "kind": "Jabbok watch",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Jordan Rift",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 3,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Watch settlement on the Jabbok route into Gilead.",
+        "settlement_class": "watch_town",
+        "site_role": [
+          "jabbok_watch",
+          "gilead_route"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "medium",
+        "location_class_label": "Watch Town"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.7,
+          32.18
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "arad",
+      "properties": {
+        "name": "Arad",
+        "kind": "Negev fortress",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Negev clans",
+        "confidence": "high",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 4,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Negev fortified site, assigned to local clans for the pre-monarchy frontier feel.",
+        "settlement_class": "fortress_outpost",
+        "site_role": [
+          "negev_fortress",
+          "desert_admin"
+        ],
+        "fortification_level": 4,
+        "classification_confidence": "high",
+        "location_class_label": "Fortress Outpost"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.13,
+          31.28
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "hormah",
+      "properties": {
+        "name": "Hormah",
+        "kind": "Negev village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Negev clans",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 1,
+        "defense_bonus": 3,
+        "settlement_density": 2,
+        "label_tier": "minor",
+        "notes": "Southern hill-country edge village placed between Beersheba and the open desert.",
+        "settlement_class": "village",
+        "site_role": [
+          "negev_edge"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "low",
+        "location_class_label": "Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.95,
+          31.15
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "tel_masos",
+      "properties": {
+        "name": "Tel Masos",
+        "kind": "Negev trade village",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Negev clans",
+        "confidence": "medium",
+        "supply_value": 3,
+        "water_access": 2,
+        "defense_bonus": 2,
+        "settlement_density": 3,
+        "label_tier": "minor",
+        "notes": "Negev settlement on desert exchange routes near the Beersheba basin.",
+        "settlement_class": "trade_village",
+        "site_role": [
+          "desert_trade"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "medium",
+        "location_class_label": "Trade Village"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.97,
+          31.2
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "tamar",
+      "properties": {
+        "name": "Tamar",
+        "kind": "Desert outpost",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Wilderness",
+        "confidence": "medium",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 3,
+        "settlement_density": 1,
+        "label_tier": "minor",
+        "notes": "Arabah outpost and water point between Edom and the Dead Sea approaches.",
+        "settlement_class": "oasis_outpost",
+        "site_role": [
+          "arabah_water_point",
+          "desert_route"
+        ],
+        "fortification_level": 3,
+        "classification_confidence": "medium",
+        "location_class_label": "Oasis Outpost"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.25,
+          30.94
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "kenite_camp",
+      "properties": {
+        "name": "Kenite Camp",
+        "kind": "Clan camp",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Kenite clans",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 1,
+        "defense_bonus": 2,
+        "settlement_density": 1,
+        "label_tier": "minor",
+        "notes": "Mobile clan camp in the southern borderland, useful for non-royal desert contacts.",
+        "settlement_class": "clan_camp",
+        "site_role": [
+          "pastoral_camp",
+          "desert_contact"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "low",
+        "location_class_label": "Clan Camp"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.05,
+          31.12
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "amalekite_camp",
+      "properties": {
+        "name": "Amalekite Camp",
+        "kind": "Raider camp",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Amalekite clans",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 1,
+        "defense_bonus": 2,
+        "settlement_density": 1,
+        "label_tier": "minor",
+        "notes": "Desert raider camp placed south of Ziklag for future threat and rumor hooks.",
+        "settlement_class": "raider_camp",
+        "site_role": [
+          "pastoral_raiding"
+        ],
+        "fortification_level": 1,
+        "classification_confidence": "low",
+        "location_class_label": "Raider Camp"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.76,
+          30.97
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "midianite_well",
+      "properties": {
+        "name": "Midianite Well",
+        "kind": "Desert well",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Midianite clans",
+        "confidence": "low",
+        "supply_value": 2,
+        "water_access": 3,
+        "defense_bonus": 1,
+        "settlement_density": 1,
+        "label_tier": "minor",
+        "notes": "Southern desert well added as a remote non-Israelite waystop.",
+        "settlement_class": "desert_well",
+        "site_role": [
+          "water_source",
+          "waystop"
+        ],
+        "fortification_level": 0,
+        "classification_confidence": "low",
+        "location_class_label": "Desert Well"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.83,
+          30.55
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "megiddo",
+      "properties": {
+        "name": "Megiddo",
+        "kind": "Jezreel fortress",
+        "era_tags": [
+          "bronze_age",
+          "iron_age"
+        ],
+        "owner_faction": "Northern road",
+        "confidence": "high",
+        "supply_value": 5,
+        "water_access": 3,
+        "defense_bonus": 5,
+        "settlement_density": 5,
+        "notes": "Major road and valley fortress.",
+        "settlement_class": "fortified_city",
+        "site_role": [
+          "jezreel_crossroads",
+          "fortress"
+        ],
+        "fortification_level": 5,
+        "classification_confidence": "high",
+        "location_class_label": "Fortified City"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.18,
+          32.58
+        ]
+      }
+    }
+  ]
+}
