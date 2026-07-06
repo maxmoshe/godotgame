@@ -61,7 +61,7 @@ offset_right = 760.0
 offset_bottom = 84.0
 theme_override_colors/font_color = Color(0.82, 0.74, 0.58, 1)
 theme_override_font_sizes/font_size = 17
-text = "Click a city, lord, or NPC party to travel there. Hold left mouse to follow the pointer. Press I for inventory, P for party, F for sling test."
+text = "Click a city, lord, or NPC party to travel there. Hold left mouse to follow the pointer. Scroll to zoom. Press I for inventory, P for party, F for sling test."
 
 [node name="StatusLabel" type="Label" parent="HUD" unique_id=568490766]
 offset_left = 22.0

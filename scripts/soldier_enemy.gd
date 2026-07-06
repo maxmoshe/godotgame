@@ -19,14 +19,14 @@ const GROUND_STICK_VELOCITY := -0.25
 const MAX_STAT := 50
 const MIN_STAT := 1
 const BASE_MELEE_DAMAGE := 8
-const BASE_ARROW_DAMAGE := 8
-const ARROW_SPEED := 22.0
+const BASE_ARROW_DAMAGE := 12
+const ARROW_SPEED := 45.0
 const ARROW_RELEASE_HEIGHT := 1.05
 const ARROW_FORWARD_OFFSET := 0.55
 const BOW_AIM_HEIGHT := 0.86
 const MAX_ARROW_LEAD_SECONDS := 1.2
 const SWORD_ATTACK_RANGE := 1.85
-const BOW_ATTACK_RANGE := 18.0
+const BOW_ATTACK_RANGE := 40.0
 const SWORD_ATTACK_COOLDOWN := 0.95
 const BOW_CHARGE_SECONDS := 2.1
 const BOW_CHARGING_MOVE_MULTIPLIER := 0.35
@@ -92,8 +92,9 @@ var _right_arm_mesh: MeshInstance3D
 var _left_leg_mesh: MeshInstance3D
 var _right_leg_mesh: MeshInstance3D
 var _sword_pivot: Node3D
-var _bow_mesh: MeshInstance3D
-var _bow_string_mesh: MeshInstance3D
+var _bow_pivot: Node3D
+var _bow_string_top: MeshInstance3D
+var _bow_string_bottom: MeshInstance3D
 var _loaded_arrow_mesh: MeshInstance3D
 var _animated_meshes: Array[Node3D] = []
 var _base_positions: Array[Vector3] = []
@@ -822,12 +823,51 @@ func _build_round_shield() -> void:
 
 
 func _build_bow() -> void:
-	_bow_mesh = _add_capsule("Bow", Vector3(0.47, 1.05, -0.24), 0.025, 1.05, _leather_material, true)
-	_bow_mesh.rotation_degrees = Vector3(0.0, 0.0, 16.0)
-	_bow_string_mesh = _add_box("BowString", Vector3(0.47, 1.05, -0.33), Vector3(0.012, 1.0, 0.012), _make_material(Color("#d8c58d"), 0.95), true)
-	_loaded_arrow_mesh = _add_box("LoadedArrow", Vector3(0.47, 1.04, -0.56), Vector3(0.025, 0.025, 0.68), _make_material(Color("#6b4328"), 0.88), true)
-	_remember_animation_node(_bow_mesh)
-	_remember_animation_node(_bow_string_mesh)
+	_bow_pivot = Node3D.new()
+	_bow_pivot.name = "BowPivot"
+	_bow_pivot.position = Vector3(-0.35, 0.8, -0.15)
+	add_child(_bow_pivot)
+
+	var bow = _add_capsule("Bow", Vector3.ZERO, 0.025, 1.05, _leather_material, true)
+	bow.rotation_degrees = Vector3(0.0, 0.0, 16.0)
+
+	_bow_string_top = _add_box("BowStringTop", Vector3.ZERO, Vector3(0.008, 0.008, 1.0), _make_material(Color("#d8c58d"), 0.95), true)
+	_bow_string_bottom = _add_box("BowStringBottom", Vector3.ZERO, Vector3(0.008, 0.008, 1.0), _make_material(Color("#d8c58d"), 0.95), true)
+	_loaded_arrow_mesh = _add_box("LoadedArrow", Vector3.ZERO, Vector3(0.025, 0.025, 0.68), _make_material(Color("#6b4328"), 0.88), true)
+
+	remove_child(bow)
+	remove_child(_bow_string_top)
+	remove_child(_bow_string_bottom)
+	remove_child(_loaded_arrow_mesh)
+
+	_bow_pivot.add_child(bow)
+	_bow_pivot.add_child(_bow_string_top)
+	_bow_pivot.add_child(_bow_string_bottom)
+	_bow_pivot.add_child(_loaded_arrow_mesh)
+
+	var top_tip_local = Vector3(-0.14, 0.5, 0)
+	var bottom_tip_local = Vector3(0.14, -0.5, 0)
+	var nock_local = Vector3(0, 0, 0)
+	
+	var top_tip_global = _bow_pivot.to_global(top_tip_local)
+	var nock_global = _bow_pivot.to_global(nock_local)
+	var bottom_tip_global = _bow_pivot.to_global(bottom_tip_local)
+	
+	_bow_string_top.global_position = (top_tip_global + nock_global) / 2.0
+	if top_tip_global.distance_squared_to(nock_global) > 0.001:
+		_bow_string_top.look_at(nock_global, Vector3.UP)
+	_bow_string_top.scale.z = top_tip_local.distance_to(nock_local)
+	
+	_bow_string_bottom.global_position = (bottom_tip_global + nock_global) / 2.0
+	if bottom_tip_global.distance_squared_to(nock_global) > 0.001:
+		_bow_string_bottom.look_at(nock_global, Vector3.UP)
+	_bow_string_bottom.scale.z = bottom_tip_local.distance_to(nock_local)
+
+	_loaded_arrow_mesh.position = Vector3(0, 0, -0.34)
+
+	_remember_animation_node(_bow_pivot)
+	_remember_animation_node(_bow_string_top)
+	_remember_animation_node(_bow_string_bottom)
 	_remember_animation_node(_loaded_arrow_mesh)
 
 
@@ -971,30 +1011,82 @@ func _animate_walk(flat_speed: float) -> void:
 func _animate_sword_attack() -> void:
 	var attack_seconds := _attack_duration_seconds()
 	var elapsed := attack_seconds - _attack_time
-	var swing := smoothstep(0.0, 1.0, clampf(elapsed / attack_seconds, 0.0, 1.0))
-	var slash := sin(swing * PI)
-	var lunge := sin(clampf(swing / 0.78, 0.0, 1.0) * PI)
-	var recoil := clampf((swing - 0.62) / 0.38, 0.0, 1.0)
+	var t := clampf(elapsed / attack_seconds, 0.0, 1.0)
+	
+	var windup := 0.0
+	var strike := 0.0
+	
+	if t < 0.35:
+		windup = sin((t / 0.35) * PI * 0.5)
+	elif t < 0.50:
+		var st = (t - 0.35) / 0.15
+		windup = 1.0 - st
+		strike = sin(st * PI * 0.5)
+	else:
+		var rt = (t - 0.50) / 0.50
+		strike = 1.0 - pow(rt, 1.5)
 
-	_body_mesh.position.z -= 0.18 * lunge
-	_head_mesh.position.z -= 0.12 * lunge
-	_left_arm_mesh.rotation_degrees.x -= 18.0 * lunge
-	_right_arm_mesh.rotation_degrees.x -= 72.0 * slash + 12.0 * swing
-	_right_arm_mesh.rotation_degrees.y -= 34.0 * swing
-	_right_arm_mesh.rotation_degrees.z -= 18.0 * slash
-	_sword_pivot.rotation_degrees.x -= 112.0 * slash + 14.0 * swing
-	_sword_pivot.rotation_degrees.y -= 44.0 * swing
-	_sword_pivot.rotation_degrees.z += 16.0 * slash
-	_body_mesh.rotation_degrees.x += 7.0 * lunge - 4.0 * recoil
+	var lunge_z := 0.25 * strike - 0.05 * windup
+	
+	_body_mesh.position.z -= lunge_z
+	_head_mesh.position.z -= lunge_z * 0.8
+	_left_arm_mesh.position.z -= lunge_z
+	_right_arm_mesh.position.z -= lunge_z
+	_left_leg_mesh.position.z -= lunge_z
+	_right_leg_mesh.position.z -= lunge_z
+	
+	_sword_pivot.position.z -= lunge_z + 0.25 * strike - 0.1 * windup
+	_sword_pivot.position.y += 0.15 * strike + 0.05 * windup
+	
+	_body_mesh.rotation_degrees.x += 12.0 * strike - 6.0 * windup
+	_head_mesh.rotation_degrees.x += 6.0 * strike - 3.0 * windup
+	
+	_left_arm_mesh.rotation_degrees.x -= 25.0 * strike - 15.0 * windup
+	
+	_right_arm_mesh.rotation_degrees.x += 45.0 * windup - 95.0 * strike
+	_right_arm_mesh.rotation_degrees.y -= 35.0 * strike
+	_right_arm_mesh.rotation_degrees.z += 15.0 * windup - 15.0 * strike
+	
+	_sword_pivot.rotation_degrees.x += 60.0 * windup - 145.0 * strike
+	_sword_pivot.rotation_degrees.y += 25.0 * windup - 45.0 * strike
+	_sword_pivot.rotation_degrees.z += 25.0 * strike - 15.0 * windup
+
+	_left_leg_mesh.rotation_degrees.x -= 30.0 * strike - 10.0 * windup
+	_right_leg_mesh.rotation_degrees.x += 20.0 * strike + 10.0 * windup
 
 
 func _animate_bow_attack() -> void:
 	var elapsed := _attack_duration_seconds() - _attack_time
 	var draw := smoothstep(0.0, 1.0, clampf(elapsed / _attack_duration_seconds(), 0.0, 1.0))
-	_right_arm_mesh.rotation_degrees.x -= 32.0 * draw
-	_left_arm_mesh.rotation_degrees.x -= 16.0 * draw
-	_bow_string_mesh.position.z -= 0.16 * draw
-	_loaded_arrow_mesh.position.z -= 0.18 * draw
+	
+	_left_arm_mesh.rotation_degrees.x -= 70.0 * draw
+	_right_arm_mesh.rotation_degrees.x -= 65.0 * draw
+	_right_arm_mesh.rotation_degrees.y -= 45.0 * draw
+	
+	_bow_pivot.position.y += 0.25 * draw
+	_bow_pivot.position.z -= 0.35 * draw
+	_bow_pivot.rotation_degrees.y -= 15.0 * draw
+	
+	var nock_z = 0.45 * draw
+	var top_tip_local = Vector3(-0.14, 0.5, 0)
+	var bottom_tip_local = Vector3(0.14, -0.5, 0)
+	var nock_local = Vector3(0, 0, nock_z)
+	
+	var top_tip_global = _bow_pivot.to_global(top_tip_local)
+	var nock_global = _bow_pivot.to_global(nock_local)
+	var bottom_tip_global = _bow_pivot.to_global(bottom_tip_local)
+	
+	_bow_string_top.global_position = (top_tip_global + nock_global) / 2.0
+	if top_tip_global.distance_squared_to(nock_global) > 0.001:
+		_bow_string_top.look_at(nock_global, Vector3.UP)
+	_bow_string_top.scale.z = top_tip_local.distance_to(nock_local)
+	
+	_bow_string_bottom.global_position = (bottom_tip_global + nock_global) / 2.0
+	if bottom_tip_global.distance_squared_to(nock_global) > 0.001:
+		_bow_string_bottom.look_at(nock_global, Vector3.UP)
+	_bow_string_bottom.scale.z = bottom_tip_local.distance_to(nock_local)
+	
+	_loaded_arrow_mesh.position = Vector3(0, 0, nock_z - 0.34)
 
 
 func _animate_idle() -> void:

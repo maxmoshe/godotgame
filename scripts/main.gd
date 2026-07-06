@@ -9,6 +9,10 @@ const FOOD_BUY_AMOUNT := 4
 const FOOD_BUY_SILVER_COST := 5
 const FOOD_TAKE_AMOUNT := 7
 const FOOD_TAKE_MINIMUM_MEN := 12
+const ZOOM_MIN := 0.18
+const ZOOM_MAX := 1.2
+const ZOOM_STEP := 0.08
+const ZOOM_LERP_SPEED := 8.0
 const HIDE_MINUTES := 3 * 60
 const CHEAT_COMPANIONS := [
 	{"name": "Joab", "health": 120, "max_health": 120},
@@ -19,6 +23,7 @@ const CHEAT_COMPANIONS := [
 
 @onready var campaign_map = $CampaignMap
 @onready var player: CharacterBody2D = $Player
+@onready var camera: Camera2D = $Player/Camera2D
 @onready var hud: CanvasLayer = $HUD
 @onready var location_label: Label = $HUD/LocationLabel
 @onready var time_label: Label = $HUD/TimeLabel
@@ -47,6 +52,7 @@ var _dialogue_target: Dictionary = {}
 var _dialogue_recruit_count := 0
 var _last_shown_game_minute := -1
 var _last_player_position := Vector2.ZERO
+var _target_zoom := 0.82
 var _cheat_panel: Panel
 var _cheat_notice_label: Label
 var _cheat_companion_index := 0
@@ -56,6 +62,8 @@ func _ready() -> void:
 	player.world_bounds = campaign_map.get_playable_rect()
 	_restore_campaign_state()
 	_last_player_position = player.global_position
+	campaign_map.player_position = player.global_position
+	_target_zoom = camera.zoom.x
 	dialogue_panel.visible = false
 	inventory_panel.visible = false
 	market_panel.visible = false
@@ -76,8 +84,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_smooth_zoom(delta)
+	campaign_map.player_position = player.global_position
 	if _advance_time_if_player_moved(delta):
 		GameState.advance_travel_survival(delta)
+		campaign_map.queue_redraw()
 		var caught_target: Dictionary = campaign_map.update_lord_pressure(delta, player.global_position, _is_player_in_safe_place())
 		if not caught_target.is_empty() and not dialogue_panel.visible:
 			_force_lord_encounter(caught_target)
@@ -150,6 +161,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	var mouse_event := event as InputEventMouseButton
 	if mouse_event == null:
+		return
+
+	if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
+		_target_zoom = clampf(_target_zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+		_mark_input_handled()
+		return
+
+	if mouse_event.pressed and mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		_target_zoom = clampf(_target_zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+		_mark_input_handled()
 		return
 
 	if mouse_event.button_index != MOUSE_BUTTON_LEFT or not mouse_event.pressed:
@@ -831,6 +852,17 @@ func _mark_input_handled() -> void:
 	var viewport := get_viewport()
 	if viewport != null:
 		viewport.set_input_as_handled()
+
+
+func _smooth_zoom(delta: float) -> void:
+	if camera == null:
+		return
+	var current_zoom := camera.zoom.x
+	var new_zoom := lerpf(current_zoom, _target_zoom, clampf(ZOOM_LERP_SPEED * delta, 0.0, 1.0))
+	camera.zoom = Vector2(new_zoom, new_zoom)
+	campaign_map.camera_zoom = new_zoom
+	if absf(new_zoom - current_zoom) > 0.001:
+		campaign_map.queue_redraw()
 
 
 func _exit_tree() -> void:

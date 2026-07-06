@@ -8,6 +8,9 @@ const ABNER_DETECTION_RADIUS := 520.0
 const ABNER_ESCAPE_RADIUS := 760.0
 const ABNER_CATCH_RADIUS := 42.0
 const ABNER_PURSUIT_SPEED_MULTIPLIER := 1.38
+const NPC_RENDER_RADIUS_BASE := 900.0
+const NPC_FADE_BAND_BASE := 200.0
+const NPC_ZOOM_REFERENCE := 0.82
 
 var land_polygon := PackedVector2Array([
 	Vector2(-430, -1180), Vector2(210, -1210), Vector2(515, -900),
@@ -118,6 +121,8 @@ const ROADS := [
 
 var _font: Font
 var _lord_parties: Array[Dictionary] = []
+var player_position := Vector2.ZERO
+var camera_zoom := 0.82
 
 
 func _ready() -> void:
@@ -307,36 +312,57 @@ func _draw_roads() -> void:
 
 
 func _draw_settlements() -> void:
+	var s := _ui_scale()
 	for settlement in SETTLEMENTS:
 		var pos := _scaled_point(settlement["pos"])
 		var is_philistine := String(settlement["kind"]).contains("Philistine")
 		var fill := Color("#7f2f2d") if is_philistine else Color("#294f66")
 		var ring := Color("#f3dfaa")
 
-		draw_circle(pos, 11.0, Color(0.18, 0.11, 0.07, 0.34))
-		draw_circle(pos, 8.0, ring)
-		draw_circle(pos, 5.0, fill)
+		draw_circle(pos, 11.0 * s, Color(0.18, 0.11, 0.07, 0.34))
+		draw_circle(pos, 8.0 * s, ring)
+		draw_circle(pos, 5.0 * s, fill)
 
 		if _font:
-			draw_string(_font, pos + Vector2(13.0, -9.0), String(settlement["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18.0, Color("#2b1d12"))
+			draw_string(_font, pos + Vector2(13.0 * s, -9.0 * s), String(settlement["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 18.0 * s, Color("#2b1d12"))
 
 
 func _draw_npc_parties() -> void:
 	for party in NPC_PARTIES:
 		var pos := _scaled_point(party["pos"])
-		draw_circle(pos + Vector2(4.0, 5.0), 13.0, Color(0.07, 0.04, 0.02, 0.30))
-		draw_circle(pos, 11.0, Color("#efe0a6"))
-		draw_circle(pos, 7.0, Color("#3c7c45"))
-		draw_circle(pos + Vector2(3.0, -3.0), 3.0, Color("#f7edc8"))
+		var distance := pos.distance_to(player_position)
+		if distance > _effective_npc_render_radius():
+			continue
+		var alpha := _npc_distance_alpha(distance)
+
+		var shadow_color := Color(0.07, 0.04, 0.02, 0.30 * alpha)
+		var ring_color := Color("#efe0a6")
+		ring_color.a = alpha
+		var fill_color := Color("#3c7c45")
+		fill_color.a = alpha
+		var highlight_color := Color("#f7edc8")
+		highlight_color.a = alpha
+
+		draw_circle(pos + Vector2(4.0, 5.0), 13.0, shadow_color)
+		draw_circle(pos, 11.0, ring_color)
+		draw_circle(pos, 7.0, fill_color)
+		draw_circle(pos + Vector2(3.0, -3.0), 3.0, highlight_color)
 
 		if _font:
-			draw_string(_font, pos + Vector2(15.0, -10.0), String(party["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17.0, Color("#2b1d12"))
+			var label_color := Color("#2b1d12")
+			label_color.a = alpha
+			draw_string(_font, pos + Vector2(15.0, -10.0), String(party["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17.0, label_color)
 
 
 func _draw_lord_parties() -> void:
 	for lord in _lord_parties:
 		var pos: Vector2 = lord["pos"]
+		var distance := pos.distance_to(player_position)
+		if distance > _effective_npc_render_radius():
+			continue
+		var alpha := _npc_distance_alpha(distance)
 		var faction_color := Color(String(lord.get("color", "#704c2f")))
+		faction_color.a = alpha
 		var is_pursuing := _is_lord_pursuing(lord)
 		var diamond := PackedVector2Array([
 			pos + Vector2(0.0, -16.0),
@@ -345,15 +371,25 @@ func _draw_lord_parties() -> void:
 			pos + Vector2(-14.0, 0.0)
 		])
 
-		draw_circle(pos + Vector2(4.0, 6.0), 17.0, Color(0.06, 0.035, 0.02, 0.34))
-		draw_colored_polygon(diamond, Color("#f0dda4"))
-		draw_polyline(PackedVector2Array([diamond[0], diamond[1], diamond[2], diamond[3], diamond[0]]), Color("#b12824") if is_pursuing else Color("#51351e"), 3.0 if is_pursuing else 2.0, true)
+		var shadow_color := Color(0.06, 0.035, 0.02, 0.34 * alpha)
+		var fill_color := Color("#f0dda4")
+		fill_color.a = alpha
+		var outline_color := Color("#b12824") if is_pursuing else Color("#51351e")
+		outline_color.a = alpha
+		var highlight_color := Color("#fff2be")
+		highlight_color.a = alpha
+
+		draw_circle(pos + Vector2(4.0, 6.0), 17.0, shadow_color)
+		draw_colored_polygon(diamond, fill_color)
+		draw_polyline(PackedVector2Array([diamond[0], diamond[1], diamond[2], diamond[3], diamond[0]]), outline_color, 3.0 if is_pursuing else 2.0, true)
 		draw_circle(pos, 8.0, faction_color)
-		draw_circle(pos + Vector2(3.0, -4.0), 3.0, Color("#fff2be"))
+		draw_circle(pos + Vector2(3.0, -4.0), 3.0, highlight_color)
 
 		if _font:
 			var label := "%s (%d)" % [String(lord["name"]), int(lord["party_size"])]
-			draw_string(_font, pos + Vector2(18.0, -13.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17.0, Color("#2b1d12"))
+			var label_color := Color("#2b1d12")
+			label_color.a = alpha
+			draw_string(_font, pos + Vector2(18.0, -13.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 17.0, label_color)
 
 
 func _draw_frame() -> void:
@@ -377,8 +413,9 @@ func _draw_threat_circles() -> void:
 
 
 func _draw_region_label(text: String, position: Vector2, color: Color = Color("#4f3a24")) -> void:
+	var s := _ui_scale()
 	if _font:
-		draw_string(_font, position, text, HORIZONTAL_ALIGNMENT_CENTER, 260.0, 28.0, color)
+		draw_string(_font, position, text, HORIZONTAL_ALIGNMENT_CENTER, 260.0 * s, 28.0 * s, color)
 
 
 func _draw_polygon_outline(points: PackedVector2Array, color: Color, width: float) -> void:
@@ -558,3 +595,24 @@ func _target_from_lord(lord: Dictionary) -> Dictionary:
 	target["type"] = "lord"
 	target["lord_id"] = String(lord.get("name", ""))
 	return target
+
+
+func _effective_npc_render_radius() -> float:
+	return NPC_RENDER_RADIUS_BASE * (camera_zoom / NPC_ZOOM_REFERENCE)
+
+
+func _effective_npc_fade_band() -> float:
+	return NPC_FADE_BAND_BASE * (camera_zoom / NPC_ZOOM_REFERENCE)
+
+
+func _npc_distance_alpha(distance: float) -> float:
+	var radius := _effective_npc_render_radius()
+	var band := _effective_npc_fade_band()
+	var fade_start := radius - band
+	if distance <= fade_start:
+		return 1.0
+	return clampf(1.0 - (distance - fade_start) / band, 0.0, 1.0)
+
+
+func _ui_scale() -> float:
+	return clampf(NPC_ZOOM_REFERENCE / camera_zoom, 1.0, 5.0)
