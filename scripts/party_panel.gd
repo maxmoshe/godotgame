@@ -41,6 +41,29 @@ func add_generic_soldiers(count: int) -> void:
 	_rebuild_panel()
 
 
+func add_named_character(character: Dictionary) -> void:
+	var character_name := String(character.get("name", "Companion"))
+	for existing in _named_characters:
+		if String(existing.get("name", "")) == character_name:
+			return
+
+	var max_character_health := int(character.get("max_health", 100))
+	_named_characters.append({
+		"name": character_name,
+		"health": int(character.get("health", max_character_health)),
+		"max_health": max_character_health
+	})
+	_rebuild_panel()
+
+
+func heal_party() -> void:
+	player_health = player_max_health
+	for character in _named_characters:
+		character["max_health"] = maxi(1, int(character.get("max_health", 100)))
+		character["health"] = int(character["max_health"])
+	_rebuild_panel()
+
+
 func _rebuild_panel() -> void:
 	for child in get_children():
 		child.free()

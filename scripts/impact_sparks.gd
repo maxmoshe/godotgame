@@ -1,8 +1,13 @@
 extends Node3D
 
 const SPARK_LIFETIME := 0.95
+const LIGHT_SPARK_LIFETIME := 0.42
+const FULL_PARTICLE_AMOUNT := 90
+const LIGHT_PARTICLE_AMOUNT := 22
+const FULL_DEBRIS_COUNT := 34
 
 var _age := 0.0
+var _lifetime := SPARK_LIFETIME
 var _spark_nodes: Array = []
 var _spark_velocities: Array[Vector3] = []
 var _spark_lifetimes: Array[float] = []
@@ -11,36 +16,38 @@ var _heat_material: StandardMaterial3D
 var _flash_light: OmniLight3D
 
 
-func burst(position: Vector3, normal: Vector3 = Vector3.UP) -> void:
+func burst(position: Vector3, normal: Vector3 = Vector3.UP, full_detail := true) -> void:
 	global_position = position
+	_lifetime = SPARK_LIFETIME if full_detail else LIGHT_SPARK_LIFETIME
 	var burst_direction := normal.normalized()
 	if burst_direction.length() < 0.01:
 		burst_direction = Vector3.UP
 
-	_add_heat_mark(burst_direction)
-	_add_flash_light()
-	_add_visible_debris(burst_direction)
+	_add_heat_mark(burst_direction, full_detail)
+	if full_detail:
+		_add_flash_light()
+		_add_visible_debris(burst_direction)
 	var particles := GPUParticles3D.new()
 	particles.one_shot = true
-	particles.amount = 90
-	particles.lifetime = 0.62
+	particles.amount = FULL_PARTICLE_AMOUNT if full_detail else LIGHT_PARTICLE_AMOUNT
+	particles.lifetime = 0.62 if full_detail else 0.26
 	particles.explosiveness = 0.96
-	particles.randomness = 0.72
+	particles.randomness = 0.72 if full_detail else 0.48
 	particles.emitting = true
 
 	var material := ParticleProcessMaterial.new()
 	material.direction = burst_direction
-	material.spread = 72.0
-	material.initial_velocity_min = 4.5
-	material.initial_velocity_max = 11.0
+	material.spread = 72.0 if full_detail else 46.0
+	material.initial_velocity_min = 4.5 if full_detail else 2.6
+	material.initial_velocity_max = 11.0 if full_detail else 6.0
 	material.gravity = Vector3(0.0, -9.8, 0.0)
-	material.scale_min = 0.13
-	material.scale_max = 0.24
+	material.scale_min = 0.13 if full_detail else 0.08
+	material.scale_max = 0.24 if full_detail else 0.15
 	material.color = Color("#ffd16a")
 	particles.process_material = material
 
 	var mesh := SphereMesh.new()
-	mesh.radius = 0.065
+	mesh.radius = 0.065 if full_detail else 0.04
 	mesh.height = 0.13
 	var spark_material := _spark_material()
 	mesh.material = spark_material
@@ -52,17 +59,17 @@ func _process(delta: float) -> void:
 	_age += delta
 	_update_heat_mark()
 	_update_visible_debris(delta)
-	if _age >= SPARK_LIFETIME:
+	if _age >= _lifetime:
 		queue_free()
 
 
-func _add_heat_mark(surface_normal: Vector3) -> void:
+func _add_heat_mark(surface_normal: Vector3, full_detail: bool) -> void:
 	_heat_mark = MeshInstance3D.new()
 	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.34
-	mesh.bottom_radius = 0.34
+	mesh.top_radius = 0.34 if full_detail else 0.22
+	mesh.bottom_radius = mesh.top_radius
 	mesh.height = 0.014
-	mesh.radial_segments = 24
+	mesh.radial_segments = 24 if full_detail else 10
 	_heat_mark.mesh = mesh
 	_heat_mark.transform.basis = _basis_from_y_axis(surface_normal)
 	_heat_material = StandardMaterial3D.new()
@@ -85,7 +92,7 @@ func _add_flash_light() -> void:
 
 func _add_visible_debris(burst_direction: Vector3) -> void:
 	var material := _spark_material()
-	for i in range(34):
+	for i in range(FULL_DEBRIS_COUNT):
 		var spark := MeshInstance3D.new()
 		var mesh := SphereMesh.new()
 		mesh.radius = randf_range(0.045, 0.085)
@@ -128,7 +135,7 @@ func _update_visible_debris(delta: float) -> void:
 
 
 func _update_heat_mark() -> void:
-	var fade := clampf(1.0 - (_age / SPARK_LIFETIME), 0.0, 1.0)
+	var fade := clampf(1.0 - (_age / _lifetime), 0.0, 1.0)
 	var eased_fade := fade * fade
 
 	if _heat_mark != null:

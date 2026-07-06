@@ -5,11 +5,24 @@ const MINUTES_PER_DAY := 24 * 60
 const MOVEMENT_EPSILON := 0.05
 const MIN_RECRUIT_COUNT := 1
 const MAX_RECRUIT_COUNT := 3
+const FOOD_BUY_AMOUNT := 4
+const FOOD_BUY_SILVER_COST := 5
+const FOOD_TAKE_AMOUNT := 7
+const FOOD_TAKE_MINIMUM_MEN := 12
+const HIDE_MINUTES := 3 * 60
+const CHEAT_COMPANIONS := [
+	{"name": "Joab", "health": 120, "max_health": 120},
+	{"name": "Abishai", "health": 115, "max_health": 115},
+	{"name": "Asahel", "health": 105, "max_health": 105},
+	{"name": "Benaiah", "health": 130, "max_health": 130}
+]
 
 @onready var campaign_map = $CampaignMap
 @onready var player: CharacterBody2D = $Player
+@onready var hud: CanvasLayer = $HUD
 @onready var location_label: Label = $HUD/LocationLabel
 @onready var time_label: Label = $HUD/TimeLabel
+@onready var status_label: Label = $HUD/StatusLabel
 @onready var dialogue_panel: Panel = $HUD/DialoguePanel
 @onready var dialogue_title: Label = $HUD/DialoguePanel/TitleLabel
 @onready var dialogue_body: Label = $HUD/DialoguePanel/BodyLabel
@@ -17,6 +30,10 @@ const MAX_RECRUIT_COUNT := 3
 @onready var dialogue_recruit_button: Button = $HUD/DialoguePanel/RecruitButton
 @onready var dialogue_attack_button: Button = $HUD/DialoguePanel/AttackButton
 @onready var dialogue_trade_button: Button = $HUD/DialoguePanel/TradeButton
+@onready var dialogue_rumor_button: Button = $HUD/DialoguePanel/RumorButton
+@onready var dialogue_buy_food_button: Button = $HUD/DialoguePanel/BuyFoodButton
+@onready var dialogue_take_food_button: Button = $HUD/DialoguePanel/TakeFoodButton
+@onready var dialogue_hide_button: Button = $HUD/DialoguePanel/HideButton
 @onready var dialogue_leave_button: Button = $HUD/DialoguePanel/LeaveButton
 @onready var inventory_panel: Panel = $HUD/InventoryPanel
 @onready var market_panel: Panel = $HUD/MarketPanel
@@ -30,6 +47,9 @@ var _dialogue_target: Dictionary = {}
 var _dialogue_recruit_count := 0
 var _last_shown_game_minute := -1
 var _last_player_position := Vector2.ZERO
+var _cheat_panel: Panel
+var _cheat_notice_label: Label
+var _cheat_companion_index := 0
 
 
 func _ready() -> void:
@@ -40,19 +60,31 @@ func _ready() -> void:
 	inventory_panel.visible = false
 	market_panel.visible = false
 	party_panel.visible = false
+	_build_cheat_panel()
 	dialogue_continue_button.pressed.connect(_advance_dialogue)
 	dialogue_recruit_button.pressed.connect(_recruit_soldiers)
 	dialogue_attack_button.pressed.connect(_start_lord_combat)
 	dialogue_trade_button.pressed.connect(_open_trade)
+	dialogue_rumor_button.pressed.connect(_ask_for_news)
+	dialogue_buy_food_button.pressed.connect(_buy_food)
+	dialogue_take_food_button.pressed.connect(_take_food)
+	dialogue_hide_button.pressed.connect(_hide_until_dark)
 	dialogue_leave_button.pressed.connect(_close_dialogue)
 	_update_location_label(true)
 	_update_time_label()
+	_update_status_label()
 
 
 func _process(delta: float) -> void:
 	if _advance_time_if_player_moved(delta):
-		campaign_map.advance_lord_parties_for_real_seconds(delta)
+		GameState.advance_travel_survival(delta)
+		var caught_target: Dictionary = campaign_map.update_lord_pressure(delta, player.global_position, _is_player_in_safe_place())
+		if not caught_target.is_empty() and not dialogue_panel.visible:
+			_force_lord_encounter(caught_target)
+			_update_status_label()
+			return
 	_update_time_label()
+	_update_status_label()
 	GameState.campaign_position = player.global_position
 
 	if _is_manual_movement_pressed() and not _pending_encounter.is_empty():
@@ -74,10 +106,17 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var key_event := event as InputEventKey
+	if key_event != null and key_event.pressed and not key_event.echo and key_event.keycode == KEY_H:
+		_toggle_cheat_panel()
+		_mark_input_handled()
+		return
+
 	if key_event != null and key_event.pressed and not key_event.echo and key_event.keycode == KEY_I:
 		inventory_panel.visible = not inventory_panel.visible
 		if inventory_panel.visible:
 			party_panel.visible = false
+			if _cheat_panel != null:
+				_cheat_panel.visible = false
 		if not inventory_panel.visible:
 			market_panel.visible = false
 		_mark_input_handled()
@@ -88,6 +127,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if party_panel.visible:
 			inventory_panel.visible = false
 			market_panel.visible = false
+			if _cheat_panel != null:
+				_cheat_panel.visible = false
 		_mark_input_handled()
 		return
 
@@ -104,7 +145,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_mark_input_handled()
 		return
 
-	if _is_pointer_over_inventory() or _is_pointer_over_market() or _is_pointer_over_party():
+	if _is_pointer_over_inventory() or _is_pointer_over_market() or _is_pointer_over_party() or _is_pointer_over_cheat_panel():
 		return
 
 	var mouse_event := event as InputEventMouseButton
@@ -168,6 +209,7 @@ func _save_campaign_state() -> void:
 	GameState.player_inventory_slots = inventory_panel.get_slots_copy()
 	GameState.market_inventory_slots = market_panel.get_slots_copy()
 	GameState.save_party_data(party_panel.get_party_data())
+	GameState.map_state["lord_parties"] = campaign_map.get_lord_save_data()
 
 
 func _advance_time_if_player_moved(delta: float) -> bool:
@@ -195,9 +237,191 @@ func _update_time_label() -> void:
 	time_label.text = "Day %d  %02d:%02d" % [day, hour, minute]
 
 
+func _update_status_label() -> void:
+	var status := "%s\n%s" % [GameState.get_survival_text(), GameState.get_objective_text()]
+	if not GameState.last_campaign_notice.is_empty():
+		status += "\n%s" % GameState.last_campaign_notice
+	status_label.text = status
+	status_label.modulate = Color("#ffb09c") if GameState.food <= 2 or GameState.morale <= 25 else Color.WHITE
+
+
+func _build_cheat_panel() -> void:
+	_cheat_panel = Panel.new()
+	_cheat_panel.name = "CheatPanel"
+	_cheat_panel.visible = false
+	_cheat_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_cheat_panel.offset_left = 454.0
+	_cheat_panel.offset_top = 118.0
+	_cheat_panel.offset_right = 826.0
+	_cheat_panel.offset_bottom = 456.0
+	_cheat_panel.add_theme_stylebox_override("panel", _make_cheat_panel_style())
+	hud.add_child(_cheat_panel)
+
+	var layout := VBoxContainer.new()
+	layout.position = Vector2(22.0, 18.0)
+	layout.size = Vector2(328.0, 300.0)
+	layout.add_theme_constant_override("separation", 10)
+	_cheat_panel.add_child(layout)
+
+	var header := HBoxContainer.new()
+	header.custom_minimum_size = Vector2(328.0, 34.0)
+	header.add_theme_constant_override("separation", 8)
+	layout.add_child(header)
+
+	var title := Label.new()
+	title.text = "Dev Cheats"
+	title.custom_minimum_size = Vector2(238.0, 32.0)
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color("#f0dda5"))
+	header.add_child(title)
+
+	var close_button := _make_cheat_button("Close")
+	close_button.custom_minimum_size = Vector2(82.0, 32.0)
+	close_button.pressed.connect(_toggle_cheat_panel)
+	header.add_child(close_button)
+
+	var resources := GridContainer.new()
+	resources.columns = 2
+	resources.add_theme_constant_override("h_separation", 8)
+	resources.add_theme_constant_override("v_separation", 8)
+	layout.add_child(resources)
+	_add_cheat_button(resources, "+25 Food", Callable(self, "_cheat_adjust_food").bind(25))
+	_add_cheat_button(resources, "+100 Silver", Callable(self, "_cheat_adjust_silver").bind(100))
+	_add_cheat_button(resources, "+10 Morale", Callable(self, "_cheat_adjust_morale").bind(10))
+	_add_cheat_button(resources, "Cool Heat", Callable(self, "_cheat_adjust_heat").bind(-100))
+
+	var party := GridContainer.new()
+	party.columns = 2
+	party.add_theme_constant_override("h_separation", 8)
+	party.add_theme_constant_override("v_separation", 8)
+	layout.add_child(party)
+	_add_cheat_button(party, "+5 Soldiers", Callable(self, "_cheat_add_soldiers").bind(5))
+	_add_cheat_button(party, "+25 Soldiers", Callable(self, "_cheat_add_soldiers").bind(25))
+	_add_cheat_button(party, "Add Companion", Callable(self, "_cheat_add_companion"))
+	_add_cheat_button(party, "Heal Party", Callable(self, "_cheat_heal_party"))
+
+	_add_cheat_button(layout, "Fill Inventory Supplies", Callable(self, "_cheat_add_inventory_supplies"), Vector2(328.0, 36.0))
+
+	_cheat_notice_label = Label.new()
+	_cheat_notice_label.custom_minimum_size = Vector2(328.0, 44.0)
+	_cheat_notice_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cheat_notice_label.add_theme_font_size_override("font_size", 15)
+	_cheat_notice_label.add_theme_color_override("font_color", Color("#d6c391"))
+	_cheat_notice_label.text = "Press H to close."
+	layout.add_child(_cheat_notice_label)
+
+
+func _make_cheat_panel_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.10, 0.08, 0.06, 0.97)
+	style.border_color = Color("#c99d55")
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(6)
+	return style
+
+
+func _add_cheat_button(parent: Control, text: String, callback: Callable, minimum_size := Vector2(160.0, 36.0)) -> void:
+	var button := _make_cheat_button(text)
+	button.custom_minimum_size = minimum_size
+	button.pressed.connect(callback)
+	parent.add_child(button)
+
+
+func _make_cheat_button(text: String) -> Button:
+	var button := Button.new()
+	button.text = text
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 16)
+	return button
+
+
+func _toggle_cheat_panel() -> void:
+	if _cheat_panel == null:
+		return
+	_cheat_panel.visible = not _cheat_panel.visible
+	if _cheat_panel.visible:
+		inventory_panel.visible = false
+		market_panel.visible = false
+		party_panel.visible = false
+		_cheat_notice_label.text = "Press H to close."
+
+
+func _cheat_adjust_food(amount: int) -> void:
+	GameState.adjust_food(amount)
+	_finish_cheat("Food %s. Current food: %d." % [_format_signed_amount(amount), GameState.food])
+
+
+func _cheat_adjust_silver(amount: int) -> void:
+	GameState.adjust_silver(amount)
+	_finish_cheat("Silver %s. Current silver: %d." % [_format_signed_amount(amount), GameState.silver])
+
+
+func _cheat_adjust_morale(amount: int) -> void:
+	GameState.adjust_morale(amount)
+	_finish_cheat("Morale %s. Current morale: %d." % [_format_signed_amount(amount), GameState.morale])
+
+
+func _cheat_adjust_heat(amount: int) -> void:
+	GameState.adjust_heat(amount)
+	_finish_cheat("Heat %s. Current heat: %d." % [_format_signed_amount(amount), GameState.heat])
+
+
+func _cheat_add_soldiers(count: int) -> void:
+	party_panel.add_generic_soldiers(count)
+	_finish_cheat("Added %d soldiers. Party soldiers: %d." % [count, party_panel.generic_soldier_count])
+
+
+func _cheat_add_companion() -> void:
+	var character: Dictionary
+	if _cheat_companion_index < CHEAT_COMPANIONS.size():
+		character = Dictionary(CHEAT_COMPANIONS[_cheat_companion_index]).duplicate(true)
+	else:
+		var number := _cheat_companion_index - CHEAT_COMPANIONS.size() + 1
+		character = {
+			"name": "Mighty Man %d" % number,
+			"health": 110,
+			"max_health": 110
+		}
+	_cheat_companion_index += 1
+	party_panel.add_named_character(character)
+	_finish_cheat("Added companion: %s." % String(character.get("name", "Companion")))
+
+
+func _cheat_heal_party() -> void:
+	party_panel.heal_party()
+	_finish_cheat("Party healed.")
+
+
+func _cheat_add_inventory_supplies() -> void:
+	var missing := 0
+	missing += inventory_panel.add_item("barley_bread", 12)
+	missing += inventory_panel.add_item("sling_stones", 30)
+	missing += inventory_panel.add_item("olive_oil", 4)
+	missing += inventory_panel.add_item("bronze_dagger", 1)
+	var message := "Inventory supplies added."
+	if missing > 0:
+		message = "Inventory filled; %d item(s) did not fit." % missing
+	_finish_cheat(message)
+
+
+func _finish_cheat(message: String) -> void:
+	GameState.last_campaign_notice = "Dev cheat: %s" % message
+	_save_campaign_state()
+	_update_status_label()
+	if _cheat_notice_label != null:
+		_cheat_notice_label.text = message
+
+
+func _format_signed_amount(amount: int) -> String:
+	if amount >= 0:
+		return "+%d" % amount
+	return "%d" % amount
+
+
 func _show_dialogue(target: Dictionary) -> void:
 	dialogue_title.text = _dialogue_title_for(target)
 	_dialogue_target = target.duplicate()
+	_maybe_complete_ziklag_objective(_dialogue_target)
 	_dialogue_recruit_count = _roll_recruit_count_for(target)
 	_dialogue_pages = _dialogue_pages_for(target)
 	_dialogue_page_index = 0
@@ -240,6 +464,10 @@ func _open_trade() -> void:
 	dialogue_recruit_button.visible = false
 	dialogue_attack_button.visible = false
 	dialogue_trade_button.visible = false
+	dialogue_rumor_button.visible = false
+	dialogue_buy_food_button.visible = false
+	dialogue_take_food_button.visible = false
+	dialogue_hide_button.visible = false
 	dialogue_leave_button.text = "Leave market"
 
 
@@ -256,6 +484,7 @@ func _recruit_soldiers() -> void:
 	party_panel.add_generic_soldiers(recruit_count)
 	GameState.save_party_data(party_panel.get_party_data())
 	GameState.start_settlement_recruit_cooldown(settlement_name)
+	GameState.adjust_morale(2)
 	_dialogue_recruit_count = 0
 
 	var soldier_word := "soldier" if recruit_count == 1 else "soldiers"
@@ -264,7 +493,74 @@ func _recruit_soldiers() -> void:
 	dialogue_recruit_button.visible = false
 	dialogue_attack_button.visible = false
 	dialogue_trade_button.visible = true
+	dialogue_rumor_button.visible = true
+	dialogue_buy_food_button.visible = true
+	dialogue_take_food_button.visible = true
+	dialogue_hide_button.visible = true
 	dialogue_leave_button.text = "Leave"
+	_maybe_complete_ziklag_objective(_dialogue_target)
+	_update_status_label()
+
+
+func _ask_for_news() -> void:
+	if String(_dialogue_target.get("type", "")) != "settlement":
+		return
+
+	dialogue_body.text = _build_rumor_text()
+	_hide_settlement_action_buttons()
+	dialogue_leave_button.text = "Leave"
+
+
+func _buy_food() -> void:
+	if String(_dialogue_target.get("type", "")) != "settlement":
+		return
+
+	if not GameState.spend_silver(FOOD_BUY_SILVER_COST):
+		dialogue_body.text = "The merchants fold their hands. Food costs %d silver, and your purse is too light." % FOOD_BUY_SILVER_COST
+		_render_dialogue_page()
+		_update_status_label()
+		return
+
+	GameState.adjust_food(FOOD_BUY_AMOUNT)
+	GameState.adjust_morale(1)
+	GameState.last_campaign_notice = "Food bought quietly. The band breathes easier."
+	dialogue_body.text = "You buy grain, dates, and skins of water from families willing to risk a small kindness. Silver -%d. Food +%d. Morale +1." % [FOOD_BUY_SILVER_COST, FOOD_BUY_AMOUNT]
+	_hide_settlement_action_buttons()
+	_update_status_label()
+
+
+func _take_food() -> void:
+	if String(_dialogue_target.get("type", "")) != "settlement":
+		return
+
+	if not _can_take_food_by_force():
+		dialogue_body.text = "Your band is not large enough to make threats stick. Taking food by force needs at least %d men." % FOOD_TAKE_MINIMUM_MEN
+		_render_dialogue_page()
+		return
+
+	GameState.adjust_food(FOOD_TAKE_AMOUNT)
+	GameState.adjust_heat(12)
+	GameState.adjust_morale(-4)
+	GameState.last_campaign_notice = "Word spreads that David's men took what they needed."
+	dialogue_body.text = "Your men take food from guarded store jars and leave angry faces behind them. Food +%d. Heat +12. Morale -4." % FOOD_TAKE_AMOUNT
+	_hide_settlement_action_buttons()
+	_update_status_label()
+
+
+func _hide_until_dark() -> void:
+	if String(_dialogue_target.get("type", "")) != "settlement":
+		return
+
+	GameState.set_game_total_minutes(GameState.get_game_total_minutes() + HIDE_MINUTES)
+	GameState.adjust_food(-1)
+	GameState.adjust_morale(1)
+	GameState.clear_lord_pursuit_state("Abner ben Ner")
+	GameState.last_campaign_notice = "You lie low until the road quiets."
+	dialogue_body.text = "You keep the men under roofs and behind walls until the road has fewer eyes. Time passes. Food -1. Morale +1. Any immediate pursuit is broken."
+	_update_time_label()
+	campaign_map.queue_redraw()
+	_hide_settlement_action_buttons()
+	_update_status_label()
 
 
 func _start_lord_combat() -> void:
@@ -287,6 +583,11 @@ func _dialogue_pages_for(target: Dictionary) -> Array[String]:
 func _settlement_dialogue_pages(settlement: Dictionary) -> Array[String]:
 	var settlement_name := String(settlement["name"])
 	var settlement_kind := String(settlement["kind"]).to_lower()
+	if settlement_name == "Ziklag" and GameState.objective_complete:
+		return [
+			"You reach Ziklag with enough men to be more than a fugitive's shadow. The band has weight now: names, blades, hunger, and loyalty.",
+			"For the first time in days, Saul's road is behind you instead of around your throat. This is not a kingdom yet, but it is a foothold."
+		]
 	return [
 		"You arrive at %s, %s. Dust hangs over the road behind you, and the first eyes you meet belong to men on the gate tower." % [settlement_name, settlement_kind],
 		"The gate guard lowers his spear, then recognizes that you come openly. Word travels faster than donkeys here; by sunset, half the town will know who entered and from which road.",
@@ -340,7 +641,108 @@ func _render_dialogue_page() -> void:
 		dialogue_recruit_button.text = "Recruit (%d)" % _dialogue_recruit_count
 	dialogue_attack_button.visible = is_lord and not has_next
 	dialogue_trade_button.visible = is_settlement and not has_next
+	dialogue_rumor_button.visible = is_settlement and not has_next
+	dialogue_buy_food_button.visible = is_settlement and not has_next
+	dialogue_take_food_button.visible = is_settlement and not has_next
+	dialogue_hide_button.visible = is_settlement and not has_next
+	dialogue_buy_food_button.disabled = is_settlement and not GameState.can_spend_silver(FOOD_BUY_SILVER_COST)
+	dialogue_take_food_button.disabled = is_settlement and not _can_take_food_by_force()
+	dialogue_buy_food_button.text = "Buy Food (%ds)" % FOOD_BUY_SILVER_COST
+	dialogue_take_food_button.text = "Take Food" if _can_take_food_by_force() else "Need %d Men" % FOOD_TAKE_MINIMUM_MEN
 	dialogue_leave_button.text = "Leave"
+
+
+func _hide_settlement_action_buttons() -> void:
+	dialogue_continue_button.visible = false
+	dialogue_recruit_button.visible = false
+	dialogue_attack_button.visible = false
+	dialogue_trade_button.visible = false
+	dialogue_rumor_button.visible = false
+	dialogue_buy_food_button.visible = false
+	dialogue_take_food_button.visible = false
+	dialogue_hide_button.visible = false
+	dialogue_buy_food_button.disabled = false
+	dialogue_take_food_button.disabled = false
+
+
+func _force_lord_encounter(target: Dictionary) -> void:
+	player.stop_travel()
+	_pending_encounter = {}
+	GameState.last_campaign_notice = "Abner has caught you on the road."
+	_show_dialogue(target)
+
+
+func _is_player_in_safe_place() -> bool:
+	var settlement: Dictionary = campaign_map.get_nearest_settlement(player.global_position, 70.0)
+	if settlement.is_empty():
+		return false
+	var settlement_name := String(settlement.get("name", ""))
+	return settlement_name in ["Ramah", "Nob", "Bethlehem", "Hebron", "Keilah", "Ziklag", "En-gedi"]
+
+
+func _maybe_complete_ziklag_objective(target: Dictionary) -> void:
+	if GameState.objective_complete:
+		return
+	if String(target.get("type", "")) != "settlement":
+		return
+	if String(target.get("name", "")) != "Ziklag":
+		return
+	if GameState.get_party_men_count() < GameState.get_objective_target_men():
+		return
+
+	GameState.objective_complete = true
+	GameState.adjust_morale(8)
+	GameState.last_campaign_notice = "Ziklag is reached. The first pressure loop is won."
+	GameState.clear_all_lord_pursuit_states()
+
+
+func _can_take_food_by_force() -> bool:
+	return GameState.get_party_men_count() >= FOOD_TAKE_MINIMUM_MEN
+
+
+func _build_rumor_text() -> String:
+	var lines := PackedStringArray()
+	var nearest_lord: Dictionary = campaign_map.get_nearest_hostile_lord_info(player.global_position)
+	if nearest_lord.is_empty():
+		lines.append("No one has seen a hostile banner close by.")
+	else:
+		var lord_name := String(nearest_lord.get("name", "a hostile lord"))
+		var direction := String(nearest_lord.get("direction", "nearby"))
+		var distance := int(float(nearest_lord.get("distance", 0.0)) / 3.0)
+		lines.append("%s is roughly %d map-paces to the %s." % [lord_name, distance, direction])
+
+	var abner_state := String(GameState.get_lord_pursuit_state("Abner ben Ner").get("state", ""))
+	if abner_state == "pursuing":
+		lines.append("Abner is not patrolling now. He is following your trail.")
+	elif GameState.heat >= 25:
+		lines.append("Saul's men ask sharper questions because your name is getting hotter.")
+	else:
+		lines.append("Abner's riders are still searching by roads and gate gossip.")
+
+	var recruit_names: Array[String] = campaign_map.get_recruitable_settlement_names()
+	if recruit_names.is_empty():
+		lines.append("No town nearby can spare more men today.")
+	else:
+		lines.append("Men can still be found at %s." % _format_name_list(recruit_names, 3))
+
+	var remaining := maxi(0, GameState.get_objective_target_men() - GameState.get_party_men_count())
+	if remaining <= 0:
+		lines.append("You have enough men. Reach Ziklag and make it count.")
+	else:
+		lines.append("You still need %d more men before Ziklag is more than a hiding place." % remaining)
+
+	return "\n".join(lines)
+
+
+func _format_name_list(names: Array[String], limit: int) -> String:
+	var shown := PackedStringArray()
+	var count := mini(names.size(), limit)
+	for index in range(count):
+		shown.append(names[index])
+	var text := ", ".join(shown)
+	if names.size() > limit:
+		text += ", and others"
+	return text
 
 
 func _roll_recruit_count_for(target: Dictionary) -> int:
@@ -373,7 +775,8 @@ func _should_follow_mouse_pointer() -> bool:
 		and not dialogue_panel.visible \
 		and not _is_pointer_over_inventory() \
 		and not _is_pointer_over_market() \
-		and not _is_pointer_over_party()
+		and not _is_pointer_over_party() \
+		and not _is_pointer_over_cheat_panel()
 
 
 func _is_pointer_over_inventory() -> bool:
@@ -398,6 +801,14 @@ func _is_pointer_over_party() -> bool:
 		return false
 	return party_panel.visible \
 		and party_panel.get_global_rect().has_point(viewport.get_mouse_position())
+
+
+func _is_pointer_over_cheat_panel() -> bool:
+	var viewport := get_viewport()
+	if viewport == null or _cheat_panel == null:
+		return false
+	return _cheat_panel.visible \
+		and _cheat_panel.get_global_rect().has_point(viewport.get_mouse_position())
 
 
 func _is_dialogue_advance_click(event: InputEvent) -> bool:

@@ -1,7 +1,7 @@
 extends Label3D
 
-const LIFE_SECONDS := 0.9
-const RISE_SPEED := 1.15
+const LIFE_SECONDS := 0.62
+const RISE_SPEED := 0.9
 
 var _age := 0.0
 var _base_color := Color.WHITE
@@ -13,8 +13,8 @@ func start(damage: int, origin: Vector3, color: Color) -> void:
 	_base_color = color
 	modulate = color
 	outline_modulate = Color(0.0, 0.0, 0.0, 0.78)
-	outline_size = 8
-	font_size = 42
+	outline_size = 5
+	font_size = 36
 	pixel_size = 0.012
 	billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	no_depth_test = true

@@ -3,6 +3,11 @@ extends Node2D
 const MAP_SCALE := 3.0
 const BASE_MAP_RECT := Rect2(Vector2(-900.0, -1250.0), Vector2(1800.0, 2500.0))
 const MAP_RECT := Rect2(BASE_MAP_RECT.position * MAP_SCALE, BASE_MAP_RECT.size * MAP_SCALE)
+const ABNER_NAME := "Abner ben Ner"
+const ABNER_DETECTION_RADIUS := 520.0
+const ABNER_ESCAPE_RADIUS := 760.0
+const ABNER_CATCH_RADIUS := 42.0
+const ABNER_PURSUIT_SPEED_MULTIPLIER := 1.38
 
 var land_polygon := PackedVector2Array([
 	Vector2(-430, -1180), Vector2(210, -1210), Vector2(515, -900),
@@ -118,6 +123,7 @@ var _lord_parties: Array[Dictionary] = []
 func _ready() -> void:
 	_font = ThemeDB.fallback_font
 	_initialize_lord_parties()
+	_restore_lord_parties_from_game_state()
 	queue_redraw()
 
 
@@ -127,6 +133,63 @@ func get_playable_rect() -> Rect2:
 
 func advance_lord_parties_for_real_seconds(real_seconds: float) -> void:
 	_advance_lord_parties(real_seconds)
+
+
+func update_lord_pressure(real_seconds: float, player_position: Vector2, player_is_safe: bool) -> Dictionary:
+	if _lord_parties.is_empty() or real_seconds <= 0.0:
+		return {}
+
+	var caught_target: Dictionary = {}
+	for index in range(_lord_parties.size()):
+		var lord: Dictionary = _lord_parties[index]
+		if String(lord.get("name", "")) == ABNER_NAME:
+			var result := _advance_abner_pressure(lord, real_seconds, player_position, player_is_safe)
+			lord = result["lord"]
+			var caught = result["caught"]
+			if caught is Dictionary and not Dictionary(caught).is_empty():
+				caught_target = Dictionary(caught)
+		else:
+			lord = _advance_lord_on_route(lord, real_seconds)
+		_lord_parties[index] = lord
+
+	queue_redraw()
+	return caught_target
+
+
+func get_nearest_hostile_lord_info(world_position: Vector2) -> Dictionary:
+	var best: Dictionary = {}
+	var best_distance := INF
+	for lord in _lord_parties:
+		if not _is_hostile_lord(lord):
+			continue
+		var lord_position: Vector2 = lord["pos"]
+		var distance := world_position.distance_to(lord_position)
+		if distance < best_distance:
+			best_distance = distance
+			best = _target_from_lord(lord)
+			best["distance"] = distance
+			best["direction"] = _direction_text(lord_position - world_position)
+	return best
+
+
+func get_recruitable_settlement_names() -> Array[String]:
+	var names: Array[String] = []
+	for settlement in SETTLEMENTS:
+		var name := String(settlement.get("name", ""))
+		if GameState.can_recruit_from_settlement(name):
+			names.append(name)
+	return names
+
+
+func get_lord_save_data() -> Array:
+	var save_data: Array = []
+	for lord in _lord_parties:
+		save_data.append({
+			"name": String(lord.get("name", "")),
+			"pos": lord.get("pos", Vector2.ZERO),
+			"route_index": int(lord.get("route_index", 1))
+		})
+	return save_data
 
 
 func get_nearest_settlement(world_position: Vector2, radius: float = 95.0) -> Dictionary:
@@ -180,6 +243,7 @@ func _draw() -> void:
 	_draw_base()
 	_draw_terrain()
 	_draw_roads()
+	_draw_threat_circles()
 	_draw_settlements()
 	_draw_lord_parties()
 	_draw_npc_parties()
@@ -273,6 +337,7 @@ func _draw_lord_parties() -> void:
 	for lord in _lord_parties:
 		var pos: Vector2 = lord["pos"]
 		var faction_color := Color(String(lord.get("color", "#704c2f")))
+		var is_pursuing := _is_lord_pursuing(lord)
 		var diamond := PackedVector2Array([
 			pos + Vector2(0.0, -16.0),
 			pos + Vector2(14.0, 0.0),
@@ -282,7 +347,7 @@ func _draw_lord_parties() -> void:
 
 		draw_circle(pos + Vector2(4.0, 6.0), 17.0, Color(0.06, 0.035, 0.02, 0.34))
 		draw_colored_polygon(diamond, Color("#f0dda4"))
-		draw_polyline(PackedVector2Array([diamond[0], diamond[1], diamond[2], diamond[3], diamond[0]]), Color("#51351e"), 2.0, true)
+		draw_polyline(PackedVector2Array([diamond[0], diamond[1], diamond[2], diamond[3], diamond[0]]), Color("#b12824") if is_pursuing else Color("#51351e"), 3.0 if is_pursuing else 2.0, true)
 		draw_circle(pos, 8.0, faction_color)
 		draw_circle(pos + Vector2(3.0, -4.0), 3.0, Color("#fff2be"))
 
@@ -294,6 +359,21 @@ func _draw_lord_parties() -> void:
 func _draw_frame() -> void:
 	draw_rect(MAP_RECT, Color("#5c4328"), false, 10.0)
 	draw_rect(MAP_RECT.grow(-18.0), Color(0.22, 0.13, 0.06, 0.28), false, 2.0)
+
+
+func _draw_threat_circles() -> void:
+	for lord in _lord_parties:
+		if String(lord.get("name", "")) != ABNER_NAME:
+			continue
+		var pos: Vector2 = lord["pos"]
+		var detection_radius := _abner_detection_radius()
+		var fill := Color(0.72, 0.10, 0.08, 0.08)
+		var edge := Color(0.72, 0.10, 0.08, 0.30)
+		if _is_lord_pursuing(lord):
+			fill = Color(0.95, 0.08, 0.04, 0.14)
+			edge = Color(0.95, 0.08, 0.04, 0.58)
+		draw_circle(pos, detection_radius, fill)
+		draw_arc(pos, detection_radius, 0.0, TAU, 96, edge, 4.0, true)
 
 
 func _draw_region_label(text: String, position: Vector2, color: Color = Color("#4f3a24")) -> void:
@@ -329,47 +409,134 @@ func _initialize_lord_parties() -> void:
 		_lord_parties.append(lord)
 
 
+func _restore_lord_parties_from_game_state() -> void:
+	var saved_parties := Array(GameState.map_state.get("lord_parties", []))
+	if saved_parties.is_empty():
+		return
+
+	for saved in saved_parties:
+		if not (saved is Dictionary):
+			continue
+		var saved_lord := Dictionary(saved)
+		var saved_name := String(saved_lord.get("name", ""))
+		for index in range(_lord_parties.size()):
+			if String(_lord_parties[index].get("name", "")) != saved_name:
+				continue
+			var lord := _lord_parties[index]
+			lord["pos"] = Vector2(saved_lord.get("pos", lord.get("pos", Vector2.ZERO)))
+			lord["route_index"] = int(saved_lord.get("route_index", lord.get("route_index", 1)))
+			_lord_parties[index] = lord
+			break
+
+
 func _advance_lord_parties(delta: float) -> void:
 	if _lord_parties.is_empty() or delta <= 0.0:
 		return
 
 	for index in range(_lord_parties.size()):
-		var lord: Dictionary = _lord_parties[index]
-		var route: Array = lord.get("route", [])
-		if route.size() < 2:
-			continue
+		_lord_parties[index] = _advance_lord_on_route(_lord_parties[index], delta)
 
-		var pos: Vector2 = lord["pos"]
-		var route_index := clampi(int(lord.get("route_index", 1)), 0, route.size() - 1)
-		var target: Vector2 = route[route_index]
-		var remaining := float(lord.get("speed", 40.0)) * MAP_SCALE * delta
-		var hop_guard := route.size() + 2
+	queue_redraw()
 
-		while remaining > 0.0 and hop_guard > 0:
-			var to_target := target - pos
-			var distance := to_target.length()
-			if distance <= 0.01:
-				route_index = (route_index + 1) % route.size()
-				target = route[route_index]
-				hop_guard -= 1
-				continue
 
-			var step := minf(remaining, distance)
-			pos += to_target.normalized() * step
-			remaining -= step
+func _advance_lord_on_route(lord: Dictionary, delta: float) -> Dictionary:
+	var route: Array = lord.get("route", [])
+	if route.size() < 2:
+		return lord
 
-			if step < distance:
-				break
+	var pos: Vector2 = lord["pos"]
+	var route_index := clampi(int(lord.get("route_index", 1)), 0, route.size() - 1)
+	var target: Vector2 = route[route_index]
+	var remaining := float(lord.get("speed", 40.0)) * MAP_SCALE * delta
+	var hop_guard := route.size() + 2
 
+	while remaining > 0.0 and hop_guard > 0:
+		var to_target := target - pos
+		var distance := to_target.length()
+		if distance <= 0.01:
 			route_index = (route_index + 1) % route.size()
 			target = route[route_index]
 			hop_guard -= 1
+			continue
 
-		lord["pos"] = pos
-		lord["route_index"] = route_index
-		_lord_parties[index] = lord
+		var step := minf(remaining, distance)
+		pos += to_target.normalized() * step
+		remaining -= step
 
-	queue_redraw()
+		if step < distance:
+			break
+
+		route_index = (route_index + 1) % route.size()
+		target = route[route_index]
+		hop_guard -= 1
+
+	lord["pos"] = pos
+	lord["route_index"] = route_index
+	return lord
+
+
+func _advance_abner_pressure(lord: Dictionary, delta: float, player_position: Vector2, player_is_safe: bool) -> Dictionary:
+	var pos: Vector2 = lord["pos"]
+	var distance := pos.distance_to(player_position)
+	var is_pursuing := _is_lord_pursuing(lord)
+
+	if is_pursuing and player_is_safe:
+		GameState.clear_lord_pursuit_state(ABNER_NAME)
+		GameState.last_campaign_notice = "Abner loses your trail among friendly walls and narrow paths."
+		return {"lord": _advance_lord_on_route(lord, delta), "caught": {}}
+
+	if is_pursuing and distance > ABNER_ESCAPE_RADIUS:
+		GameState.clear_lord_pursuit_state(ABNER_NAME)
+		GameState.last_campaign_notice = "Abner's riders fall behind. For now, the road opens."
+		return {"lord": _advance_lord_on_route(lord, delta), "caught": {}}
+
+	if is_pursuing:
+		var to_player := player_position - pos
+		if to_player.length() > 0.01:
+			var step := float(lord.get("speed", 40.0)) * MAP_SCALE * ABNER_PURSUIT_SPEED_MULTIPLIER * delta
+			pos += to_player.normalized() * minf(step, to_player.length())
+			lord["pos"] = pos
+		if pos.distance_to(player_position) <= ABNER_CATCH_RADIUS:
+			var caught := _target_from_lord(lord)
+			caught["forced"] = true
+			caught["dialogue"] = "Abner's riders close the last stretch at a hard pace. There is no more room to pretend this is only dust on the road."
+			return {"lord": lord, "caught": caught}
+		return {"lord": lord, "caught": {}}
+
+	lord = _advance_lord_on_route(lord, delta)
+	pos = lord["pos"]
+	if pos.distance_to(player_position) <= _abner_detection_radius():
+		GameState.set_lord_pursuit_state(ABNER_NAME, {"state": "pursuing", "started_minute": GameState.get_game_total_minutes()})
+		GameState.adjust_morale(-2)
+		GameState.last_campaign_notice = "Abner has seen your trail and turns toward you."
+
+	return {"lord": lord, "caught": {}}
+
+
+func _is_lord_pursuing(lord: Dictionary) -> bool:
+	var name := String(lord.get("name", ""))
+	return String(GameState.get_lord_pursuit_state(name).get("state", "")) == "pursuing"
+
+
+func _is_hostile_lord(lord: Dictionary) -> bool:
+	var faction := String(lord.get("faction", ""))
+	return faction == "House of Saul" or faction == "Philistine Lords" or faction == "Edomite Retinue"
+
+
+func _abner_detection_radius() -> float:
+	return ABNER_DETECTION_RADIUS + float(GameState.heat) * 2.5
+
+
+func _direction_text(offset: Vector2) -> String:
+	if offset.length() <= 0.01:
+		return "here"
+	var horizontal := "east" if offset.x > 0.0 else "west"
+	var vertical := "south" if offset.y > 0.0 else "north"
+	if absf(offset.x) > absf(offset.y) * 1.6:
+		return horizontal
+	if absf(offset.y) > absf(offset.x) * 1.6:
+		return vertical
+	return "%s-%s" % [vertical, horizontal]
 
 
 func _scaled_route(route: Array) -> Array:
