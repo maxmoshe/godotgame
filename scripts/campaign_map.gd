@@ -189,10 +189,14 @@ func get_recruitable_settlement_names() -> Array[String]:
 func get_lord_save_data() -> Array:
 	var save_data: Array = []
 	for lord in _lord_parties:
+		var lord_name := String(lord.get("name", ""))
+		if GameState.is_lord_defeated(lord_name):
+			continue
 		save_data.append({
-			"name": String(lord.get("name", "")),
+			"name": lord_name,
 			"pos": lord.get("pos", Vector2.ZERO),
-			"route_index": int(lord.get("route_index", 1))
+			"route_index": int(lord.get("route_index", 1)),
+			"party_size": int(lord.get("party_size", 0))
 		})
 	return save_data
 
@@ -440,6 +444,8 @@ func _initialize_lord_parties() -> void:
 
 	for template in LORD_PARTIES:
 		var lord: Dictionary = template.duplicate(true)
+		if GameState.is_lord_defeated(String(lord.get("name", ""))):
+			continue
 		lord["pos"] = _scaled_point(template["start"])
 		lord["route"] = _scaled_route(template["route"])
 		lord["route_index"] = 1
@@ -462,6 +468,7 @@ func _restore_lord_parties_from_game_state() -> void:
 			var lord := _lord_parties[index]
 			lord["pos"] = Vector2(saved_lord.get("pos", lord.get("pos", Vector2.ZERO)))
 			lord["route_index"] = int(saved_lord.get("route_index", lord.get("route_index", 1)))
+			lord["party_size"] = int(saved_lord.get("party_size", lord.get("party_size", 0)))
 			_lord_parties[index] = lord
 			break
 

@@ -10,6 +10,13 @@ const STARTING_MORALE := 65
 const STARTING_HEAT := 0
 const OBJECTIVE_TARGET_MEN := 8
 const FOOD_TRAVEL_MINUTES_PER_UNIT := 90
+const LORD_LOOT_TABLE := [
+	{"id": "sling_stones", "min": 6, "max": 18, "weight": 36},
+	{"id": "barley_bread", "min": 1, "max": 4, "weight": 28},
+	{"id": "wool_cloth", "min": 1, "max": 3, "weight": 16},
+	{"id": "olive_oil", "min": 1, "max": 2, "weight": 12},
+	{"id": "bronze_dagger", "min": 1, "max": 1, "weight": 8}
+]
 
 var campaign_position := STARTING_POSITION
 var game_total_minutes := STARTING_TOTAL_MINUTES
@@ -23,6 +30,8 @@ var market_inventory_slots: Array = []
 var map_state: Dictionary = {}
 var combat_context: Dictionary = {}
 var lord_pursuit_states: Dictionary = {}
+var defeated_lords: Dictionary = {}
+var pending_campaign_loot: Dictionary = {}
 var last_campaign_notice := ""
 var party_data := {
 	"player_name": "David",
@@ -143,6 +152,17 @@ func clear_all_lord_pursuit_states() -> void:
 	lord_pursuit_states.clear()
 
 
+func mark_lord_defeated(lord_name: String) -> void:
+	if lord_name.is_empty():
+		return
+	defeated_lords[lord_name] = true
+	clear_lord_pursuit_state(lord_name)
+
+
+func is_lord_defeated(lord_name: String) -> bool:
+	return bool(defeated_lords.get(lord_name, false))
+
+
 func can_recruit_from_settlement(settlement_name: String) -> bool:
 	return get_settlement_recruit_minutes_remaining(settlement_name) <= 0
 
@@ -173,9 +193,11 @@ func get_party_data() -> Dictionary:
 
 
 func start_lord_combat(lord: Dictionary, player_party: Dictionary) -> void:
+	var lord_name := String(lord.get("lord_id", lord.get("name", "Enemy lord")))
 	combat_context = {
 		"type": "lord",
-		"enemy_name": String(lord.get("name", "Enemy lord")),
+		"enemy_lord_id": lord_name,
+		"enemy_name": String(lord.get("name", lord_name)),
 		"enemy_title": String(lord.get("title", "lord")),
 		"enemy_faction": String(lord.get("faction", "Enemy party")),
 		"enemy_party_size": int(lord.get("party_size", 0)),
@@ -193,3 +215,179 @@ func has_combat_context() -> bool:
 
 func get_combat_context() -> Dictionary:
 	return combat_context.duplicate(true)
+
+
+func has_pending_campaign_loot() -> bool:
+	return not pending_campaign_loot.is_empty()
+
+
+func get_pending_campaign_loot() -> Dictionary:
+	return pending_campaign_loot.duplicate(true)
+
+
+func clear_pending_campaign_loot() -> void:
+	pending_campaign_loot = {}
+
+
+func get_pending_campaign_loot_silver() -> int:
+	return int(pending_campaign_loot.get("silver", 0))
+
+
+func claim_pending_campaign_loot_silver() -> int:
+	var silver_gain := get_pending_campaign_loot_silver()
+	if silver_gain <= 0:
+		return 0
+	adjust_silver(silver_gain)
+	pending_campaign_loot["silver"] = 0
+	return silver_gain
+
+
+func apply_lord_combat_result(result: Dictionary) -> void:
+	var lord_name := String(result.get("enemy_lord_id", result.get("enemy_name", "")))
+	var outcome := String(result.get("outcome", "retreat"))
+	var enemy_start := maxi(0, int(result.get("enemy_start_count", 0)))
+	var enemy_dead := clampi(int(result.get("enemy_dead_count", 0)), 0, enemy_start)
+	var enemy_survivors := maxi(0, enemy_start - enemy_dead)
+	var friendly_dead := maxi(0, int(result.get("friendly_dead_count", 0)))
+	var player_health := maxi(0, int(result.get("player_health", 0)))
+	var player_max_health := maxi(1, int(result.get("player_max_health", 1)))
+
+	_apply_party_combat_losses(friendly_dead, player_health, player_max_health)
+	_apply_lord_party_combat_losses(lord_name, enemy_survivors, outcome == "victory")
+	_apply_combat_campaign_notice(String(result.get("enemy_name", lord_name)), outcome, enemy_start, enemy_dead, friendly_dead)
+	clear_combat_context()
+
+
+func _apply_party_combat_losses(friendly_dead: int, combat_player_health: int, combat_player_max_health: int) -> void:
+	var generic_count := maxi(0, int(party_data.get("generic_soldier_count", 0)))
+	party_data["generic_soldier_count"] = maxi(0, generic_count - friendly_dead)
+
+	var party_max_health := maxi(1, int(party_data.get("player_max_health", 100)))
+	var health_ratio := clampf(float(combat_player_health) / float(combat_player_max_health), 0.0, 1.0)
+	party_data["player_health"] = int(round(float(party_max_health) * health_ratio))
+
+
+func _apply_lord_party_combat_losses(lord_name: String, enemy_survivors: int, defeated: bool) -> void:
+	if lord_name.is_empty():
+		return
+
+	if defeated:
+		mark_lord_defeated(lord_name)
+
+	var saved_parties := Array(map_state.get("lord_parties", []))
+	var updated_parties: Array = []
+	var found_lord := false
+	for saved in saved_parties:
+		if not (saved is Dictionary):
+			continue
+		var saved_lord := Dictionary(saved).duplicate(true)
+		if String(saved_lord.get("name", "")) == lord_name:
+			found_lord = true
+			if defeated:
+				continue
+			saved_lord["party_size"] = enemy_survivors
+		updated_parties.append(saved_lord)
+
+	if not found_lord and not defeated:
+		updated_parties.append({
+			"name": lord_name,
+			"pos": campaign_position,
+			"route_index": 1,
+			"party_size": enemy_survivors
+		})
+
+	map_state["lord_parties"] = updated_parties
+
+
+func _apply_combat_campaign_notice(enemy_name: String, outcome: String, enemy_army_size: int, enemy_dead: int, friendly_dead: int) -> void:
+	var casualty_text := "No men lost."
+	if friendly_dead == 1:
+		casualty_text = "1 of your men is dead."
+	elif friendly_dead > 1:
+		casualty_text = "%d of your men are dead." % friendly_dead
+
+	if outcome == "victory":
+		var loot := _roll_lord_victory_loot(enemy_name, enemy_army_size)
+		pending_campaign_loot = loot
+		var silver_gain := int(loot.get("silver", 0))
+		adjust_morale(5)
+		last_campaign_notice = "%s is defeated. Enemy dead: %d. Loot found: %d silver, %s. %s" % [
+			enemy_name,
+			enemy_dead,
+			silver_gain,
+			_format_loot_items(Array(loot.get("items", []))),
+			casualty_text
+		]
+	elif outcome == "defeat":
+		adjust_morale(-8)
+		last_campaign_notice = "You are driven from the field by %s. Enemy dead: %d. %s" % [enemy_name, enemy_dead, casualty_text]
+	else:
+		adjust_morale(-2 if friendly_dead > 0 else 0)
+		last_campaign_notice = "You break off from %s. Enemy dead: %d. %s" % [enemy_name, enemy_dead, casualty_text]
+
+
+func _roll_lord_victory_loot(enemy_name: String, enemy_army_size: int) -> Dictionary:
+	var silver_gain := maxi(1, int(round(float(maxi(1, enemy_army_size)) * randf_range(0.75, 1.25))))
+	var item_count := randi_range(2, 3)
+	var items: Array = []
+	for _index in range(item_count):
+		items.append(_roll_lord_loot_item())
+	return {
+		"source": enemy_name,
+		"silver": silver_gain,
+		"items": items
+	}
+
+
+func _roll_lord_loot_item() -> Dictionary:
+	var total_weight := 0
+	for entry in LORD_LOOT_TABLE:
+		total_weight += int(entry["weight"])
+
+	var roll := randi_range(1, total_weight)
+	var cursor := 0
+	for entry in LORD_LOOT_TABLE:
+		cursor += int(entry["weight"])
+		if roll <= cursor:
+			return {
+				"id": String(entry["id"]),
+				"amount": randi_range(int(entry["min"]), int(entry["max"]))
+			}
+
+	var fallback: Dictionary = LORD_LOOT_TABLE[0]
+	return {
+		"id": String(fallback["id"]),
+		"amount": randi_range(int(fallback["min"]), int(fallback["max"]))
+	}
+
+
+func _format_loot_items(items: Array) -> String:
+	var parts := PackedStringArray()
+	for item in items:
+		if not (item is Dictionary):
+			continue
+		var loot_item := Dictionary(item)
+		var amount := int(loot_item.get("amount", 0))
+		var item_id := String(loot_item.get("id", "loot"))
+		if amount <= 0:
+			continue
+		parts.append("%dx %s" % [amount, _loot_item_name(item_id)])
+	if parts.is_empty():
+		return "no items"
+	return ", ".join(parts)
+
+
+func _loot_item_name(item_id: String) -> String:
+	match item_id:
+		"sling_stones":
+			return "sling stones"
+		"barley_bread":
+			return "barley bread"
+		"wool_cloth":
+			return "wool cloth"
+		"olive_oil":
+			return "olive oil"
+		"bronze_dagger":
+			return "bronze dagger"
+		_:
+			return item_id.replace("_", " ")

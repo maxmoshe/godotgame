@@ -56,6 +56,8 @@ var _target_zoom := 0.82
 var _cheat_panel: Panel
 var _cheat_notice_label: Label
 var _cheat_companion_index := 0
+var _loot_panel_active := false
+var _loot_take_silver_button: Button
 
 
 func _ready() -> void:
@@ -69,6 +71,7 @@ func _ready() -> void:
 	market_panel.visible = false
 	party_panel.visible = false
 	_build_cheat_panel()
+	_build_loot_controls()
 	dialogue_continue_button.pressed.connect(_advance_dialogue)
 	dialogue_recruit_button.pressed.connect(_recruit_soldiers)
 	dialogue_attack_button.pressed.connect(_start_lord_combat)
@@ -78,6 +81,7 @@ func _ready() -> void:
 	dialogue_take_food_button.pressed.connect(_take_food)
 	dialogue_hide_button.pressed.connect(_hide_until_dark)
 	dialogue_leave_button.pressed.connect(_close_dialogue)
+	_open_pending_campaign_loot()
 	_update_location_label(true)
 	_update_time_label()
 	_update_status_label()
@@ -225,10 +229,42 @@ func _restore_campaign_state() -> void:
 	party_panel.load_party_data(GameState.get_party_data())
 
 
+func _open_pending_campaign_loot() -> void:
+	if not GameState.has_pending_campaign_loot():
+		return
+
+	var loot := GameState.get_pending_campaign_loot()
+	_loot_panel_active = true
+	player.stop_travel()
+
+	dialogue_title.text = "Battlefield Loot"
+	dialogue_body.text = "The field is yours. Drag spoils from the left into your inventory. Silver waits separately."
+	dialogue_panel.visible = true
+	inventory_panel.visible = true
+	market_panel.visible = true
+	party_panel.visible = false
+	if _cheat_panel != null:
+		_cheat_panel.visible = false
+
+	market_panel.clear_inventory()
+	market_panel.set_title_text("Battlefield Loot")
+	for item in Array(loot.get("items", [])):
+		if not (item is Dictionary):
+			continue
+		var loot_item := Dictionary(item)
+		market_panel.add_item(String(loot_item.get("id", "")), int(loot_item.get("amount", 0)))
+
+	_hide_settlement_action_buttons()
+	dialogue_continue_button.visible = false
+	dialogue_leave_button.text = "Leave loot"
+	_update_loot_silver_button()
+
+
 func _save_campaign_state() -> void:
 	GameState.campaign_position = player.global_position
 	GameState.player_inventory_slots = inventory_panel.get_slots_copy()
-	GameState.market_inventory_slots = market_panel.get_slots_copy()
+	if not _loot_panel_active:
+		GameState.market_inventory_slots = market_panel.get_slots_copy()
 	GameState.save_party_data(party_panel.get_party_data())
 	GameState.map_state["lord_parties"] = campaign_map.get_lord_save_data()
 
@@ -330,6 +366,42 @@ func _build_cheat_panel() -> void:
 	_cheat_notice_label.add_theme_color_override("font_color", Color("#d6c391"))
 	_cheat_notice_label.text = "Press H to close."
 	layout.add_child(_cheat_notice_label)
+
+
+func _build_loot_controls() -> void:
+	_loot_take_silver_button = Button.new()
+	_loot_take_silver_button.name = "TakeLootSilverButton"
+	_loot_take_silver_button.visible = false
+	_loot_take_silver_button.focus_mode = Control.FOCUS_NONE
+	_loot_take_silver_button.offset_left = 292.0
+	_loot_take_silver_button.offset_top = 224.0
+	_loot_take_silver_button.offset_right = 456.0
+	_loot_take_silver_button.offset_bottom = 260.0
+	_loot_take_silver_button.add_theme_font_size_override("font_size", 18)
+	_loot_take_silver_button.pressed.connect(_take_loot_silver)
+	dialogue_panel.add_child(_loot_take_silver_button)
+
+
+func _take_loot_silver() -> void:
+	if not _loot_panel_active:
+		return
+
+	var silver_gain := GameState.claim_pending_campaign_loot_silver()
+	if silver_gain <= 0:
+		_update_loot_silver_button()
+		return
+
+	GameState.last_campaign_notice = "You take %d silver from the field." % silver_gain
+	_update_loot_silver_button()
+	_update_status_label()
+
+
+func _update_loot_silver_button() -> void:
+	if _loot_take_silver_button == null:
+		return
+	var silver_available := GameState.get_pending_campaign_loot_silver()
+	_loot_take_silver_button.visible = _loot_panel_active and silver_available > 0
+	_loot_take_silver_button.text = "Take %d Silver" % silver_available
 
 
 func _make_cheat_panel_style() -> StyleBoxFlat:
@@ -452,6 +524,10 @@ func _show_dialogue(target: Dictionary) -> void:
 
 
 func _close_dialogue() -> void:
+	if _loot_panel_active:
+		_close_loot_panel()
+		return
+
 	var was_trading := market_panel.visible
 	dialogue_panel.visible = false
 	market_panel.visible = false
@@ -461,6 +537,24 @@ func _close_dialogue() -> void:
 	_dialogue_page_index = 0
 	_dialogue_target = {}
 	_dialogue_recruit_count = 0
+
+
+func _close_loot_panel() -> void:
+	_loot_panel_active = false
+	GameState.player_inventory_slots = inventory_panel.get_slots_copy()
+	GameState.clear_pending_campaign_loot()
+	market_panel.clear_inventory()
+	market_panel.set_title_text("Town Market")
+	dialogue_panel.visible = false
+	market_panel.visible = false
+	inventory_panel.visible = false
+	if _loot_take_silver_button != null:
+		_loot_take_silver_button.visible = false
+	_dialogue_pages.clear()
+	_dialogue_page_index = 0
+	_dialogue_target = {}
+	_dialogue_recruit_count = 0
+	_update_status_label()
 
 
 func _advance_dialogue() -> void:
@@ -477,6 +571,9 @@ func _open_trade() -> void:
 	if String(_dialogue_target.get("type", "")) != "settlement":
 		return
 
+	market_panel.set_title_text("Town Market")
+	if GameState.has_market_inventory():
+		market_panel.load_slots(GameState.market_inventory_slots)
 	market_panel.visible = true
 	inventory_panel.visible = true
 	party_panel.visible = false
@@ -648,6 +745,9 @@ func _dialogue_title_for(target: Dictionary) -> String:
 
 
 func _render_dialogue_page() -> void:
+	if _loot_take_silver_button != null:
+		_loot_take_silver_button.visible = false
+
 	if _dialogue_pages.is_empty():
 		dialogue_body.text = ""
 	else:
@@ -682,6 +782,8 @@ func _hide_settlement_action_buttons() -> void:
 	dialogue_buy_food_button.visible = false
 	dialogue_take_food_button.visible = false
 	dialogue_hide_button.visible = false
+	if _loot_take_silver_button != null:
+		_loot_take_silver_button.visible = false
 	dialogue_buy_food_button.disabled = false
 	dialogue_take_food_button.disabled = false
 

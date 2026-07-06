@@ -1,5 +1,7 @@
 extends CharacterBody3D
 
+signal died(faction: String)
+
 const HumanProjectile := preload("res://scripts/human_projectile.gd")
 const ImpactSparks := preload("res://scripts/impact_sparks.gd")
 const DamageNumber := preload("res://scripts/damage_number.gd")
@@ -350,6 +352,7 @@ func _melee_damage_color(damage: int) -> Color:
 
 func _die() -> void:
 	_active_target = null
+	died.emit(faction)
 	remove_from_group(SOLDIER_GROUP)
 	remove_from_group(_faction_group(faction))
 	velocity = Vector3.ZERO

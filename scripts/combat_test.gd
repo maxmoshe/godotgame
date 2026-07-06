@@ -10,16 +10,19 @@ const TerrainDirtHeight := preload("res://assets/textures/terrain/rocky_gravel/g
 const StoneAlbedo := preload("res://assets/textures/terrain/marble/marble_rock_02_diff_1k.jpg")
 const StoneHeight := preload("res://assets/textures/terrain/marble/marble_rock_02_disp_1k.png")
 
-const TERRAIN_SIZE := 88.0
-const TERRAIN_STEPS := 72
+const TERRAIN_SIZE := 176.0
+const TERRAIN_STEPS := 144
 const TERRAIN_HALF := TERRAIN_SIZE * 0.5
 const TERRAIN_FALL_LIMIT := -5.0
+const GROUND_UNDERLAY_Y := -2.0
 const PLAYER_SPAWN := Vector3(0.0, 0.0, 8.0)
 const PLAYER_FOOT_CLEARANCE := 0.12
+const SMALL_ROCK_COUNT := 240
+const SMALL_ROCK_MESH_VARIANTS := 24
 const TERRAIN_COLOR_LOW := Color("#566f38")
 const TERRAIN_COLOR_HIGH := Color("#8a9a59")
 const PATH_COLOR := Color("#c0a56d")
-const COMMAND_RAY_LENGTH := 95.0
+const COMMAND_RAY_LENGTH := 185.0
 const COMMAND_RAY_STEP := 0.45
 const COMMAND_INVALID_POSITION := Vector3(999999.0, 999999.0, 999999.0)
 const FORMATION_SPACING := 1.65
@@ -38,6 +41,7 @@ const CAMPAIGN_TO_TERRAIN_SCALE := 8.0
 
 var _decoration_exclusions: Array[Dictionary] = []
 var _stone_material: ShaderMaterial
+var _small_rock_mesh_cache: Dictionary = {}
 var _last_sling_impact_speed := 0.0
 var _last_sling_damage := 0
 var _command_mode := false
@@ -51,6 +55,11 @@ var _combat_local_terrain_offset := Vector2.ZERO
 var _combat_decoration_offset := Vector2.ZERO
 var _combat_uv_offset := Vector2.ZERO
 var _combat_context: Dictionary = {}
+var _combat_result_applied := false
+var _lord_enemy_start_count := 0
+var _lord_friendly_start_count := 0
+var _lord_enemy_dead_count := 0
+var _lord_friendly_dead_count := 0
 
 
 func _ready() -> void:
@@ -63,8 +72,11 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	if Input.is_key_pressed(KEY_ESCAPE):
-		GameState.clear_combat_context()
-		get_tree().change_scene_to_file("res://scenes/main.tscn")
+		if _is_lord_combat():
+			_finish_lord_combat("retreat")
+		else:
+			GameState.clear_combat_context()
+			get_tree().change_scene_to_file("res://scenes/main.tscn")
 		return
 
 	if player.global_position.y < TERRAIN_FALL_LIMIT:
@@ -82,6 +94,7 @@ func _process(_delta: float) -> void:
 		aim_label.text = "Aiming: no zoom | Early release cancels, full charge is the first firing window | Esc: map"
 
 	_update_velocity_label()
+	_check_lord_combat_result()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -294,6 +307,10 @@ func _add_lord_combat_parties() -> void:
 	var enemy_count := maxi(0, int(_combat_context.get("enemy_party_size", 0)))
 	var player_party := Dictionary(_combat_context.get("player_party", {}))
 	var friendly_count := _party_combat_soldier_count(player_party)
+	_lord_enemy_start_count = enemy_count
+	_lord_friendly_start_count = friendly_count
+	_lord_enemy_dead_count = 0
+	_lord_friendly_dead_count = 0
 
 	for index in range(enemy_count):
 		var weapon := _enemy_weapon_for_index(index)
@@ -341,6 +358,44 @@ func _friendly_weapon_for_index(index: int) -> String:
 
 func _is_lord_combat() -> bool:
 	return String(_combat_context.get("type", "")) == "lord"
+
+
+func _on_combat_soldier_died(faction: String) -> void:
+	if not _is_lord_combat() or _combat_result_applied:
+		return
+	if faction == "enemy":
+		_lord_enemy_dead_count += 1
+	elif faction == "friendly":
+		_lord_friendly_dead_count += 1
+
+
+func _check_lord_combat_result() -> void:
+	if not _is_lord_combat() or _combat_result_applied:
+		return
+	if _lord_enemy_start_count <= 0 or _lord_enemy_dead_count >= _lord_enemy_start_count:
+		_finish_lord_combat("victory")
+		return
+	if player.health <= 0:
+		_finish_lord_combat("defeat")
+
+
+func _finish_lord_combat(outcome: String) -> void:
+	if _combat_result_applied:
+		return
+	_combat_result_applied = true
+
+	GameState.apply_lord_combat_result({
+		"outcome": outcome,
+		"enemy_lord_id": String(_combat_context.get("enemy_lord_id", _combat_context.get("enemy_name", ""))),
+		"enemy_name": String(_combat_context.get("enemy_name", "Enemy lord")),
+		"enemy_start_count": _lord_enemy_start_count,
+		"enemy_dead_count": _lord_enemy_dead_count,
+		"friendly_start_count": _lord_friendly_start_count,
+		"friendly_dead_count": _lord_friendly_dead_count,
+		"player_health": player.health,
+		"player_max_health": player.max_health
+	})
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
 
 
 func _capture_combat_map_context() -> void:
@@ -406,14 +461,15 @@ func _add_terrain() -> void:
 	terrain.name = "JudeanHillCountry"
 	add_child(terrain)
 
+	var terrain_heights := _build_terrain_height_grid()
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = "TerrainMesh"
-	var mesh := _build_terrain_mesh()
+	var mesh := _build_terrain_mesh(terrain_heights)
 	mesh_instance.mesh = mesh
 	mesh_instance.material_override = _make_terrain_material()
 	terrain.add_child(mesh_instance)
 
-	_add_terrain_heightmap_collision(terrain)
+	_add_terrain_heightmap_collision(terrain, terrain_heights)
 
 
 func _add_ground_visibility_underlay() -> void:
@@ -422,22 +478,19 @@ func _add_ground_visibility_underlay() -> void:
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2(TERRAIN_SIZE, TERRAIN_SIZE)
 	underlay.mesh = mesh
-	underlay.position.y = -0.48
+	underlay.position.y = GROUND_UNDERLAY_Y
 	underlay.material_override = _make_material(Color("#596f3c"), 1.0, 0.0)
 	add_child(underlay)
 
 
-func _add_terrain_heightmap_collision(terrain: StaticBody3D) -> void:
+func _add_terrain_heightmap_collision(terrain: StaticBody3D, terrain_heights: PackedFloat32Array) -> void:
 	var sample_count := TERRAIN_STEPS + 1
 	var step_size := TERRAIN_SIZE / float(TERRAIN_STEPS)
 	var map_data := PackedFloat32Array()
 	map_data.resize(sample_count * sample_count)
 
-	for z_index in range(sample_count):
-		var z := -TERRAIN_HALF + float(z_index) * step_size
-		for x_index in range(sample_count):
-			var x := -TERRAIN_HALF + float(x_index) * step_size
-			map_data[z_index * sample_count + x_index] = _terrain_height(x, z) / step_size
+	for index in range(map_data.size()):
+		map_data[index] = terrain_heights[index] / step_size
 
 	var heightmap := HeightMapShape3D.new()
 	heightmap.map_width = sample_count
@@ -459,22 +512,38 @@ func _place_player_on_terrain(target_position: Vector3) -> void:
 	player.velocity = Vector3.ZERO
 
 
-func _build_terrain_mesh() -> ArrayMesh:
+func _build_terrain_height_grid() -> PackedFloat32Array:
+	var sample_count := TERRAIN_STEPS + 1
+	var step_size := TERRAIN_SIZE / float(TERRAIN_STEPS)
+	var heights := PackedFloat32Array()
+	heights.resize(sample_count * sample_count)
+
+	for z_index in range(sample_count):
+		var z := -TERRAIN_HALF + float(z_index) * step_size
+		for x_index in range(sample_count):
+			var x := -TERRAIN_HALF + float(x_index) * step_size
+			heights[z_index * sample_count + x_index] = _terrain_height(x, z)
+
+	return heights
+
+
+func _build_terrain_mesh(terrain_heights: PackedFloat32Array) -> ArrayMesh:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
+	var sample_count := TERRAIN_STEPS + 1
 	var step_size := TERRAIN_SIZE / float(TERRAIN_STEPS)
 
-	for z_index in range(TERRAIN_STEPS + 1):
+	for z_index in range(sample_count):
 		var z := -TERRAIN_HALF + float(z_index) * step_size
-		for x_index in range(TERRAIN_STEPS + 1):
+		for x_index in range(sample_count):
 			var x := -TERRAIN_HALF + float(x_index) * step_size
-			var y := _terrain_height(x, z)
+			var y := terrain_heights[z_index * sample_count + x_index]
 			vertices.append(Vector3(x, y, z))
-			normals.append(_terrain_normal(x, z))
-			var color_blend := clampf((y + 0.8) / 3.7, 0.0, 1.0)
+			normals.append(_terrain_grid_normal(x_index, z_index, terrain_heights))
+			var color_blend := clampf((y + 0.8) / 10.5, 0.0, 1.0)
 			colors.append(TERRAIN_COLOR_LOW.lerp(TERRAIN_COLOR_HIGH, color_blend))
 			uvs.append(Vector2((x + TERRAIN_HALF) / TERRAIN_SIZE, (z + TERRAIN_HALF) / TERRAIN_SIZE))
 
@@ -500,6 +569,23 @@ func _build_terrain_mesh() -> ArrayMesh:
 	return mesh
 
 
+func _terrain_grid_normal(x_index: int, z_index: int, terrain_heights: PackedFloat32Array) -> Vector3:
+	var sample_count := TERRAIN_STEPS + 1
+	var step_size := TERRAIN_SIZE / float(TERRAIN_STEPS)
+	var left_index := maxi(x_index - 1, 0)
+	var right_index := mini(x_index + 1, sample_count - 1)
+	var back_index := maxi(z_index - 1, 0)
+	var front_index := mini(z_index + 1, sample_count - 1)
+
+	var left := terrain_heights[z_index * sample_count + left_index]
+	var right := terrain_heights[z_index * sample_count + right_index]
+	var back := terrain_heights[back_index * sample_count + x_index]
+	var front := terrain_heights[front_index * sample_count + x_index]
+	var x_span := maxf(step_size, float(right_index - left_index) * step_size)
+	var z_span := maxf(step_size, float(front_index - back_index) * step_size)
+	return Vector3((left - right) / x_span, 1.0, (back - front) / z_span).normalized()
+
+
 func _terrain_height(x: float, z: float) -> float:
 	var sample := Vector2(x, z) + _combat_local_terrain_offset
 	var north_ridge := _seeded_range(11, 1.25, 1.85) * exp(-pow((sample.y + _seeded_range(12, 14.0, 24.0)) / _seeded_range(13, 13.0, 19.0), 2.0))
@@ -508,8 +594,27 @@ func _terrain_height(x: float, z: float) -> float:
 	var shallow_wadi := -_seeded_range(41, 0.55, 1.05) * exp(-(pow((sample.x - _seeded_range(42, -5.0, 8.0)) / _seeded_range(43, 7.0, 12.0), 2.0) + pow((sample.y + _seeded_range(44, -6.0, 7.0)) / _seeded_range(45, 26.0, 38.0), 2.0)))
 	var ripple := 0.22 * sin(sample.x * _seeded_range(51, 0.18, 0.28) + _seeded_range(52, -PI, PI)) + 0.14 * cos((sample.x + sample.y) * _seeded_range(53, 0.13, 0.22))
 	var spawn_flatten := 0.45 * exp(-(pow(x / 10.0, 2.0) + pow((z - 8.0) / 8.0, 2.0)))
-	var base_height := maxf(-0.35, north_ridge + west_swell + east_swell + shallow_wadi + ripple - spawn_flatten)
+	var macro_height := north_ridge + west_swell + east_swell + shallow_wadi + ripple
+	var extreme_weight := _terrain_extreme_weight(x, z)
+	var outer_hills := _terrain_outer_hills(sample, extreme_weight)
+	var base_height := maxf(-0.55, macro_height * (1.0 + extreme_weight * 2.35) + outer_hills - spawn_flatten)
 	return base_height + _terrain_surface_relief(x, z)
+
+
+func _terrain_extreme_weight(x: float, z: float) -> float:
+	var edge_distance := maxf(absf(x), absf(z)) / TERRAIN_HALF
+	return smoothstep(0.22, 0.88, edge_distance)
+
+
+func _terrain_outer_hills(sample: Vector2, extreme_weight: float) -> float:
+	if extreme_weight <= 0.0:
+		return 0.0
+
+	var long_ridge := pow(0.5 + 0.5 * sin(sample.x * _seeded_range(61, 0.035, 0.052) + _seeded_range(62, -PI, PI)), 1.45)
+	var cross_ridge := pow(0.5 + 0.5 * cos(sample.y * _seeded_range(63, 0.032, 0.048) + _seeded_range(64, -PI, PI)), 1.55)
+	var rolling_noise := _value_noise(sample * 0.035 + Vector2(_seeded_range(65, -20.0, 20.0), _seeded_range(66, -20.0, 20.0)))
+	var hill_shape := long_ridge * _seeded_range(67, 3.1, 5.2) + cross_ridge * _seeded_range(68, 2.0, 3.7) + rolling_noise * _seeded_range(69, 1.1, 2.2)
+	return extreme_weight * hill_shape
 
 
 func _terrain_surface_relief(x: float, z: float) -> float:
@@ -577,16 +682,20 @@ func _terrain_normal(x: float, z: float) -> Vector3:
 
 func _add_path() -> void:
 	var path_shift := Vector3(_combat_decoration_offset.x, 0.0, _combat_decoration_offset.y)
-	var path_points := [
-		Vector3(_seeded_range(201, -34.0, -25.0), 0.0, _seeded_range(202, 14.0, 22.0)) - path_shift,
-		Vector3(_seeded_range(203, -21.0, -13.0), 0.0, _seeded_range(204, 7.0, 14.0)) - path_shift,
-		Vector3(_seeded_range(205, -10.0, -2.0), 0.0, _seeded_range(206, 1.0, 8.0)) - path_shift,
-		Vector3(_seeded_range(207, 2.0, 10.0), 0.0, _seeded_range(208, -10.0, -2.0)) - path_shift,
-		Vector3(_seeded_range(209, 14.0, 22.0), 0.0, _seeded_range(210, -22.0, -14.0)) - path_shift,
-		Vector3(_seeded_range(211, 27.0, 35.0), 0.0, _seeded_range(212, -33.0, -25.0)) - path_shift,
-	]
-	var sampled_points := _sample_path_points(path_points, 1.35)
 	var path_width := 2.4
+	var raw_path_points := [
+		Vector3(_seeded_range(201, -70.0, -52.0), 0.0, _seeded_range(202, 30.0, 46.0)) - path_shift,
+		Vector3(_seeded_range(203, -43.0, -27.0), 0.0, _seeded_range(204, 15.0, 30.0)) - path_shift,
+		Vector3(_seeded_range(205, -20.0, -4.0), 0.0, _seeded_range(206, 2.0, 16.0)) - path_shift,
+		Vector3(_seeded_range(207, 4.0, 20.0), 0.0, _seeded_range(208, -20.0, -4.0)) - path_shift,
+		Vector3(_seeded_range(209, 30.0, 46.0), 0.0, _seeded_range(210, -46.0, -30.0)) - path_shift,
+		Vector3(_seeded_range(211, 56.0, 74.0), 0.0, _seeded_range(212, -70.0, -52.0)) - path_shift,
+	]
+	var path_points: Array[Vector3] = []
+	for raw_point in raw_path_points:
+		var ground_position := _wrap_ground_position_to_terrain(Vector2(raw_point.x, raw_point.z), path_width)
+		path_points.append(Vector3(ground_position.x, 0.0, ground_position.y))
+	var sampled_points := _sample_path_points(path_points, 1.35)
 	_register_decoration_exclusion_corridor(sampled_points, path_width * 0.5 + 0.45)
 	_add_path_ribbon(sampled_points, path_width)
 
@@ -702,31 +811,54 @@ func _distance_to_segment_2d(point: Vector2, start: Vector2, finish: Vector2) ->
 
 
 func _add_small_rocks() -> void:
-	for index in range(86):
+	for index in range(SMALL_ROCK_COUNT):
 		var rock_seed := _combat_seed + index * 37
 		var angle := float(index) * _seeded_range(301, 2.15, 2.63) + _seeded_range(302, 0.0, TAU)
-		var radius := 4.0 + fmod(float(index) * _seeded_range(303, 4.35, 6.1), 40.0)
-		var x := cos(angle) * radius + sin(float(index) * _seeded_range(304, 0.42, 0.72)) * 2.8 - _combat_decoration_offset.x
-		var z := sin(angle) * radius + cos(float(index) * _seeded_range(305, 0.24, 0.50)) * 2.8 - _combat_decoration_offset.y
-		if Vector2(x, z).distance_to(Vector2(PLAYER_SPAWN.x, PLAYER_SPAWN.z)) < 3.5:
-			continue
-
+		var radius := 5.0 + fmod(float(index) * _seeded_range(303, 8.7, 12.2), TERRAIN_HALF - 8.0)
 		var size_roll := pow(_deterministic_unit(rock_seed, 222), 1.9)
 		var rock_radius := 0.16 + size_roll * 0.86
+		var raw_position := Vector2(
+			cos(angle) * radius + sin(float(index) * _seeded_range(304, 0.42, 0.72)) * 2.8 - _combat_decoration_offset.x,
+			sin(angle) * radius + cos(float(index) * _seeded_range(305, 0.24, 0.50)) * 2.8 - _combat_decoration_offset.y
+		)
+		var ground_position := _wrap_ground_position_to_terrain(raw_position, rock_radius * 1.25)
+		if ground_position.distance_to(Vector2(PLAYER_SPAWN.x, PLAYER_SPAWN.z)) < 3.5:
+			continue
+
+		var x := ground_position.x
+		var z := ground_position.y
 		var rock_position := Vector3(x, _terrain_height(x, z), z)
 		if _is_decoration_excluded(rock_position, rock_radius * 1.8):
 			continue
 		_add_small_rock(rock_position, rock_radius, rock_seed)
 
 
+func _wrap_ground_position_to_terrain(position: Vector2, margin: float) -> Vector2:
+	var safe_half := maxf(0.0, TERRAIN_HALF - margin)
+	if safe_half <= 0.0:
+		return Vector2.ZERO
+	return Vector2(
+		wrapf(position.x, -safe_half, safe_half),
+		wrapf(position.y, -safe_half, safe_half)
+	)
+
+
 func _add_small_rock(position: Vector3, radius: float, index: int) -> void:
 	var rock := MeshInstance3D.new()
 	rock.name = "SmallTerrainRock"
-	rock.mesh = _make_small_rock_mesh(radius, index)
+	rock.mesh = _small_rock_mesh_for_seed(index)
 	rock.position = position + Vector3(0.0, 0.035 + radius * 0.025, 0.0)
 	rock.rotation_degrees = Vector3(0.0, fmod(float(index) * 43.0, 360.0), 0.0)
+	rock.scale = Vector3.ONE * radius
 	rock.material_override = _make_stone_material()
 	add_child(rock)
+
+
+func _small_rock_mesh_for_seed(seed: int) -> ArrayMesh:
+	var variant := int(floor(_deterministic_unit(seed, 617) * float(SMALL_ROCK_MESH_VARIANTS)))
+	if not _small_rock_mesh_cache.has(variant):
+		_small_rock_mesh_cache[variant] = _make_small_rock_mesh(1.0, _combat_seed + variant * 101)
+	return _small_rock_mesh_cache[variant] as ArrayMesh
 
 
 func _make_small_rock_mesh(radius: float, seed: int) -> ArrayMesh:
@@ -745,12 +877,13 @@ func _make_small_rock_mesh(radius: float, seed: int) -> ArrayMesh:
 		var angle := float(segment) * TAU / float(segments)
 		var ring_noise := 0.78 + _deterministic_unit(seed, segment) * 0.38
 		var top_noise := 0.52 + _deterministic_unit(seed + 13, segment) * 0.28
+		var underside_drop := height * (0.10 + _deterministic_unit(seed + 29, segment) * 0.18)
 		var direction := Vector3(cos(angle) * squash_x, 0.0, sin(angle) * squash_z)
-		bottom.append(direction * radius * ring_noise)
+		bottom.append(direction * radius * ring_noise + Vector3(0.0, -underside_drop, 0.0))
 		middle.append(direction * radius * ring_noise * 0.86 + Vector3(0.0, height * (0.38 + _deterministic_unit(seed, segment + 30) * 0.14), 0.0))
 		top.append(direction * radius * top_noise + Vector3(0.0, height * (0.84 + _deterministic_unit(seed, segment + 60) * 0.18), 0.0))
 
-	var bottom_center := Vector3.ZERO
+	var bottom_center := Vector3(0.0, -height * (0.34 + _deterministic_unit(seed, 19) * 0.22), 0.0)
 	var top_center := Vector3(0.0, height * (1.02 + _deterministic_unit(seed, 99) * 0.16), 0.0)
 	for segment in range(segments):
 		var next := (segment + 1) % segments
@@ -844,6 +977,8 @@ func _add_soldier(position: Vector3, faction: String, weapon_type: String, power
 	soldier.set_script(SoldierEnemy)
 	soldier.position = position
 	soldier.call("setup", player, self, weapon_type, false, faction, power, speed, dexterity)
+	if _is_lord_combat() and soldier.has_signal("died"):
+		soldier.connect("died", Callable(self, "_on_combat_soldier_died"))
 	add_child(soldier)
 
 

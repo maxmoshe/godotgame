@@ -27,7 +27,7 @@ const SLING_RELEASE_WINDOW_SECONDS := 0.25
 @export var min_throw_speed := 13.0
 @export var max_throw_speed := 45.0
 @export var max_charge_time := 1.35
-@export var max_health := 100
+@export var max_health := 50
 @export var damage_knockback := 3.2
 
 @onready var camera_pivot: Node3D = $CameraPivot

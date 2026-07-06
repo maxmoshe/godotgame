@@ -11,6 +11,7 @@ const InventorySlotButton := preload("res://scripts/inventory_slot.gd")
 
 var _slot_buttons: Array = []
 var _slots: Array = []
+var _title_label: Label
 var _weight_label: Label
 
 var _item_defs := {
@@ -122,6 +123,12 @@ func load_slots(saved_slots: Array) -> void:
 	_refresh_slots()
 
 
+func set_title_text(new_title: String) -> void:
+	title_text = new_title
+	if _title_label != null:
+		_title_label.text = title_text
+
+
 func has_item(slot_index: int) -> bool:
 	return _is_valid_slot(slot_index) and not Dictionary(_slots[slot_index]).is_empty()
 
@@ -211,13 +218,13 @@ func make_drag_preview(data: Dictionary) -> Control:
 func _build_slots() -> void:
 	add_theme_stylebox_override("panel", _make_panel_style())
 
-	var title := Label.new()
-	title.text = title_text
-	title.position = Vector2(22.0, 18.0)
-	title.size = Vector2(250.0, 34.0)
-	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", Color("#f0dda5"))
-	add_child(title)
+	_title_label = Label.new()
+	_title_label.text = title_text
+	_title_label.position = Vector2(22.0, 18.0)
+	_title_label.size = Vector2(250.0, 34.0)
+	_title_label.add_theme_font_size_override("font_size", 26)
+	_title_label.add_theme_color_override("font_color", Color("#f0dda5"))
+	add_child(_title_label)
 
 	_weight_label = Label.new()
 	_weight_label.position = Vector2(214.0, 24.0)
