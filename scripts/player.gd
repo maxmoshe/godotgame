@@ -3,6 +3,8 @@ extends CharacterBody2D
 @export var speed := 135.0
 @export var world_bounds := Rect2(Vector2(-2662.0, -3712.0), Vector2(5324.0, 7424.0))
 
+var movement_constraint: Callable
+var campaign_speed_multiplier := 1.0
 var _facing := Vector2.RIGHT
 var _travel_target := Vector2.ZERO
 var _has_travel_target := false
@@ -10,6 +12,7 @@ var _arrival_radius := 20.0
 
 
 func _physics_process(_delta: float) -> void:
+	var previous_position := global_position
 	var input_vector := _get_keyboard_vector()
 
 	if input_vector != Vector2.ZERO:
@@ -23,11 +26,17 @@ func _physics_process(_delta: float) -> void:
 			input_vector = to_target.normalized()
 
 	var sprint := 1.55 if Input.is_key_pressed(KEY_SHIFT) else 1.0
-	velocity = input_vector.normalized() * speed * sprint
+	velocity = input_vector.normalized() * speed * campaign_speed_multiplier * sprint
 	move_and_slide()
 
-	global_position.x = clampf(global_position.x, world_bounds.position.x, world_bounds.end.x)
-	global_position.y = clampf(global_position.y, world_bounds.position.y, world_bounds.end.y)
+	var intended_position := _clamped_position(global_position)
+	var constrained_position := _constrained_position(intended_position, previous_position)
+	var movement_was_blocked := intended_position.distance_to(constrained_position) > 0.5
+	global_position = constrained_position
+	if movement_was_blocked:
+		velocity = Vector2.ZERO
+		if _has_travel_target:
+			_has_travel_target = false
 
 	if velocity.length() > 0.1:
 		_facing = velocity.normalized()
@@ -35,8 +44,7 @@ func _physics_process(_delta: float) -> void:
 
 
 func travel_to(target_position: Vector2) -> void:
-	_travel_target.x = clampf(target_position.x, world_bounds.position.x, world_bounds.end.x)
-	_travel_target.y = clampf(target_position.y, world_bounds.position.y, world_bounds.end.y)
+	_travel_target = _clamped_position(target_position)
 	_has_travel_target = true
 
 
@@ -47,6 +55,23 @@ func stop_travel() -> void:
 
 func is_traveling() -> bool:
 	return _has_travel_target
+
+
+func _clamped_position(position: Vector2) -> Vector2:
+	return Vector2(
+		clampf(position.x, world_bounds.position.x, world_bounds.end.x),
+		clampf(position.y, world_bounds.position.y, world_bounds.end.y)
+	)
+
+
+func _constrained_position(position: Vector2, fallback_position: Vector2) -> Vector2:
+	if not movement_constraint.is_valid():
+		return position
+
+	var constrained = movement_constraint.call(position, fallback_position)
+	if constrained is Vector2:
+		return Vector2(constrained)
+	return position
 
 
 func _draw() -> void:

@@ -19,6 +19,72 @@
     },
     "notes": "Projection is for prototype rendering only. Source coordinates remain WGS84."
   },
+  "render_calibrations": [
+    {
+      "id": "chatgpt_painted_plate_v1",
+      "asset": "res://assets/map/base/chatgpt.png",
+      "image_size_px": [992, 1586],
+      "method": "inverse_distance_weighted_control_points",
+      "softness_px": 140.0,
+      "power": 1.35,
+      "notes": "Control points georeference the generated painted plate. They are visual-rendering anchors only; source coordinates remain WGS84.",
+      "land_travel_polygons_px": [
+        {
+          "name": "Painted plate walkable land mask",
+          "kind": "land",
+          "points": [[562, 0], [552, 42], [532, 82], [498, 118], [476, 160], [458, 198], [428, 240], [404, 288], [386, 344], [366, 408], [342, 476], [318, 548], [295, 620], [273, 690], [248, 760], [222, 827], [176, 870], [158, 902], [126, 952], [82, 990], [36, 1018], [0, 1028], [0, 1586], [992, 1586], [992, 0]]
+        }
+      ],
+      "blocking_water_polygons_px": [
+        {
+          "name": "Sea of Galilee / Kinneret visual mask",
+          "kind": "lake",
+          "points": [[725, 214], [749, 219], [765, 242], [762, 270], [743, 296], [715, 290], [699, 264], [704, 235]]
+        },
+        {
+          "name": "Dead Sea visual mask",
+          "kind": "salt_lake",
+          "points": [[703, 680], [742, 682], [762, 710], [773, 760], [765, 830], [751, 870], [757, 925], [742, 998], [704, 1006], [681, 962], [675, 890], [680, 815], [690, 748]]
+        }
+      ],
+      "control_points": [
+        {"name": "Sea of Galilee / Kinneret center", "coordinates": [35.58, 32.82], "pixel": [737, 249]},
+        {"name": "Dead Sea center", "coordinates": [35.45, 31.37], "pixel": [719, 811]},
+        {"name": "Dan / upper Jordan", "coordinates": [35.65, 33.25], "pixel": [760, 112]},
+        {"name": "Hazor", "coordinates": [35.57, 33.02], "pixel": [710, 165]},
+        {"name": "Geshur", "coordinates": [35.79, 32.90], "pixel": [810, 245]},
+        {"name": "Beth-shean", "coordinates": [35.50, 32.50], "pixel": [690, 390]},
+        {"name": "Megiddo", "coordinates": [35.18, 32.58], "pixel": [515, 372]},
+        {"name": "Shechem", "coordinates": [35.28, 32.21], "pixel": [560, 515]},
+        {"name": "Shiloh", "coordinates": [35.29, 32.05], "pixel": [565, 590]},
+        {"name": "Jericho", "coordinates": [35.44, 31.87], "pixel": [680, 675]},
+        {"name": "Abel-shittim", "coordinates": [35.58, 31.86], "pixel": [748, 665]},
+        {"name": "Jebus / Jerusalem", "coordinates": [35.235, 31.777], "pixel": [558, 705]},
+        {"name": "Bethlehem", "coordinates": [35.203, 31.705], "pixel": [542, 750]},
+        {"name": "Hebron", "coordinates": [35.095, 31.532], "pixel": [510, 850]},
+        {"name": "En-gedi", "coordinates": [35.39, 31.46], "pixel": [662, 824]},
+        {"name": "Lachish", "coordinates": [34.85, 31.56], "pixel": [370, 850]},
+        {"name": "Gath / Tell es-Safi", "coordinates": [34.84694, 31.70417], "pixel": [375, 790]},
+        {"name": "Ashkelon", "coordinates": [34.54611, 31.66194], "pixel": [165, 895]},
+        {"name": "Gaza", "coordinates": [34.46333, 31.50333], "pixel": [120, 1010]},
+        {"name": "Beersheba", "coordinates": [34.79, 31.25], "pixel": [350, 1045]},
+        {"name": "Kadesh-barnea", "coordinates": [34.47, 30.65], "pixel": [305, 1245]},
+        {"name": "Rabbah / Amman", "coordinates": [35.93, 31.95], "pixel": [855, 630]},
+        {"name": "Nebo", "coordinates": [35.73, 31.77], "pixel": [790, 695]},
+        {"name": "Baal-meon", "coordinates": [35.73, 31.68], "pixel": [805, 765]},
+        {"name": "Ataroth", "coordinates": [35.74, 31.59], "pixel": [805, 785]},
+        {"name": "Dibon", "coordinates": [35.78, 31.50], "pixel": [820, 850]},
+        {"name": "Ar", "coordinates": [35.74, 31.31], "pixel": [805, 905]},
+        {"name": "Kir-hareseth", "coordinates": [35.70, 31.18], "pixel": [805, 965]},
+        {"name": "Bozrah / Edom edge", "coordinates": [35.60, 30.73], "pixel": [790, 1235]},
+        {"name": "Salecah edge", "coordinates": [36.70, 32.49], "pixel": [950, 455]},
+        {"name": "Tyre coast", "coordinates": [35.19, 33.27], "pixel": [495, 135]},
+        {"name": "Sidon coast", "coordinates": [35.37, 33.56], "pixel": [560, 50]},
+        {"name": "Akko coast", "coordinates": [35.08, 32.92], "pixel": [430, 270]},
+        {"name": "Dor coast", "coordinates": [34.92, 32.61], "pixel": [370, 430]}
+      ]
+    }
+  ],
   "layers": {
     "land_outline": "physical/land_outline.geojson",
     "water": "physical/water.geojson",

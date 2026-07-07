@@ -5,6 +5,7 @@ const PORTRAIT_SIZE := 64
 @export var player_name := "David"
 @export var player_health := 100
 @export var player_max_health := 100
+@export var leader_intelligence := 50
 @export var generic_soldier_count := 0
 
 var _named_characters: Array[Dictionary] = []
@@ -20,6 +21,7 @@ func get_party_data() -> Dictionary:
 		"player_name": player_name,
 		"player_health": player_health,
 		"player_max_health": player_max_health,
+		"leader_intelligence": leader_intelligence,
 		"named_characters": _named_characters.duplicate(true),
 		"generic_soldier_count": generic_soldier_count
 	}
@@ -29,6 +31,7 @@ func load_party_data(data: Dictionary) -> void:
 	player_name = String(data.get("player_name", player_name))
 	player_health = int(data.get("player_health", player_health))
 	player_max_health = int(data.get("player_max_health", player_max_health))
+	leader_intelligence = int(data.get("leader_intelligence", leader_intelligence))
 	generic_soldier_count = int(data.get("generic_soldier_count", generic_soldier_count))
 	_named_characters.clear()
 	for character in Array(data.get("named_characters", [])):

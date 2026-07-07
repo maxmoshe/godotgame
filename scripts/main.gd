@@ -2,6 +2,7 @@ extends Node2D
 
 const STARTING_DAY := 1
 const MINUTES_PER_DAY := 24 * 60
+const TIME_LABEL_MINUTE_STEP := 5
 const MOVEMENT_EPSILON := 0.05
 const MIN_RECRUIT_COUNT := 1
 const MAX_RECRUIT_COUNT := 3
@@ -19,6 +20,11 @@ const LOCATION_TOOLTIP_MARGIN := 10.0
 const LOCATION_FORTRESS_KEYWORDS := ["fortress", "stronghold", "watch", "outpost"]
 const LOCATION_VILLAGE_KEYWORDS := ["village", "camp", "well", "spring", "oasis", "shrine", "mine", "copper", "clan", "house"]
 const LOCATION_CITY_KEYWORDS := ["city", "port", "capital", "court", "sanctuary"]
+const PLAYER_SIZE_SPEED_PENALTY_MEN := 100.0
+const PLAYER_SIZE_SPEED_PENALTY_MAX := 0.20
+const PLAYER_INTELLIGENCE_SPEED_BONUS_STAT := 50.0
+const PLAYER_INTELLIGENCE_SPEED_BONUS_MAX := 0.30
+const PLAYER_CAMPAIGN_SPEED_MULTIPLIER := 0.5
 const HIDE_MINUTES := 3 * 60
 const CHEAT_COMPANIONS := [
 	{"name": "Joab", "health": 120, "max_health": 120},
@@ -72,7 +78,9 @@ var _location_tooltip_faction_label: Label
 
 func _ready() -> void:
 	player.world_bounds = campaign_map.get_playable_rect()
+	player.set("movement_constraint", Callable(campaign_map, "constrain_land_position"))
 	_restore_campaign_state()
+	_update_player_campaign_speed()
 	_last_player_position = player.global_position
 	campaign_map.player_position = player.global_position
 	_target_zoom = camera.zoom.x
@@ -100,6 +108,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_smooth_zoom(delta)
+	_update_player_campaign_speed()
 	campaign_map.player_position = player.global_position
 	if _advance_time_if_player_moved(delta):
 		GameState.advance_travel_survival(delta)
@@ -233,7 +242,7 @@ func _update_location_label(force: bool) -> void:
 
 
 func _restore_campaign_state() -> void:
-	player.global_position = GameState.campaign_position
+	player.global_position = campaign_map.constrain_land_position(GameState.campaign_position)
 	if GameState.has_player_inventory():
 		inventory_panel.load_slots(GameState.player_inventory_slots)
 	if GameState.has_market_inventory():
@@ -294,13 +303,14 @@ func _advance_time_if_player_moved(delta: float) -> bool:
 
 func _update_time_label() -> void:
 	var total_minutes := GameState.get_game_total_minutes()
-	if total_minutes == _last_shown_game_minute:
+	var shown_total_minutes := total_minutes - total_minutes % TIME_LABEL_MINUTE_STEP
+	if shown_total_minutes == _last_shown_game_minute:
 		return
 
-	_last_shown_game_minute = total_minutes
+	_last_shown_game_minute = shown_total_minutes
 	GameState.game_total_minutes = total_minutes
-	var day := STARTING_DAY + int(total_minutes / MINUTES_PER_DAY)
-	var minute_of_day := total_minutes % MINUTES_PER_DAY
+	var day := STARTING_DAY + int(shown_total_minutes / MINUTES_PER_DAY)
+	var minute_of_day := shown_total_minutes % MINUTES_PER_DAY
 	var hour := int(minute_of_day / 60)
 	var minute := minute_of_day % 60
 	time_label.text = "Day %d  %02d:%02d" % [day, hour, minute]
@@ -312,6 +322,21 @@ func _update_status_label() -> void:
 		status += "\n%s" % GameState.last_campaign_notice
 	status_label.text = status
 	status_label.modulate = Color("#ffb09c") if GameState.food <= 2 or GameState.morale <= 25 else Color.WHITE
+
+
+func _update_player_campaign_speed() -> void:
+	var party_data: Dictionary = party_panel.get_party_data()
+	var men := int(party_data.get("generic_soldier_count", 0))
+	var intelligence := int(party_data.get("leader_intelligence", 0))
+	player.set("campaign_speed_multiplier", _campaign_speed_multiplier(men, intelligence))
+
+
+func _campaign_speed_multiplier(men: int, intelligence: int) -> float:
+	var men_ratio := clampf(maxf(0.0, float(men)) / PLAYER_SIZE_SPEED_PENALTY_MEN, 0.0, 1.0)
+	var intelligence_ratio := clampf(maxf(0.0, float(intelligence)) / PLAYER_INTELLIGENCE_SPEED_BONUS_STAT, 0.0, 1.0)
+	var men_multiplier := 1.0 - PLAYER_SIZE_SPEED_PENALTY_MAX * men_ratio
+	var intelligence_multiplier := 1.0 + PLAYER_INTELLIGENCE_SPEED_BONUS_MAX * intelligence_ratio
+	return PLAYER_CAMPAIGN_SPEED_MULTIPLIER * men_multiplier * intelligence_multiplier
 
 
 func _build_location_tooltip() -> void:
@@ -829,10 +854,12 @@ func _hide_until_dark() -> void:
 	if String(_dialogue_target.get("type", "")) != "settlement":
 		return
 
+	campaign_map.break_player_trail_at(player.global_position, "hiding")
 	GameState.set_game_total_minutes(GameState.get_game_total_minutes() + HIDE_MINUTES)
+	campaign_map.update_overworld_ai(float(HIDE_MINUTES) / GameState.GAME_MINUTES_PER_REAL_SECOND, player.global_position, true)
 	GameState.adjust_food(-1)
 	GameState.adjust_morale(1)
-	GameState.clear_lord_pursuit_state("Abner ben Ner")
+	GameState.clear_all_lord_pursuit_states()
 	GameState.last_campaign_notice = "You lie low until the road quiets."
 	dialogue_body.text = "You keep the men under roofs and behind walls until the road has fewer eyes. Time passes. Food -1. Morale +1. Any immediate pursuit is broken."
 	_update_time_label()
@@ -951,7 +978,7 @@ func _hide_settlement_action_buttons() -> void:
 func _force_lord_encounter(target: Dictionary) -> void:
 	player.stop_travel()
 	_pending_encounter = {}
-	GameState.last_campaign_notice = "Abner has caught you on the road."
+	GameState.last_campaign_notice = "%s has caught you on the road." % String(target.get("name", "A hostile lord"))
 	_show_dialogue(target)
 
 
@@ -976,6 +1003,7 @@ func _maybe_complete_ziklag_objective(target: Dictionary) -> void:
 	GameState.objective_complete = true
 	GameState.adjust_morale(8)
 	GameState.last_campaign_notice = "Ziklag is reached. The first pressure loop is won."
+	campaign_map.break_player_trail_at(player.global_position, "Ziklag refuge")
 	GameState.clear_all_lord_pursuit_states()
 
 
@@ -985,22 +1013,20 @@ func _can_take_food_by_force() -> bool:
 
 func _build_rumor_text() -> String:
 	var lines := PackedStringArray()
-	var nearest_lord: Dictionary = campaign_map.get_nearest_hostile_lord_info(player.global_position)
-	if nearest_lord.is_empty():
+	var rumor_facts: Array[Dictionary] = campaign_map.get_rumor_facts(player.global_position)
+	if rumor_facts.is_empty():
 		lines.append("No one has seen a hostile banner close by.")
 	else:
-		var lord_name := String(nearest_lord.get("name", "a hostile lord"))
-		var direction := String(nearest_lord.get("direction", "nearby"))
-		var distance := int(float(nearest_lord.get("distance", 0.0)) / 3.0)
-		lines.append("%s is roughly %d map-paces to the %s." % [lord_name, distance, direction])
+		lines.append(_format_lord_rumor(rumor_facts[0]))
 
-	var abner_state := String(GameState.get_lord_pursuit_state("Abner ben Ner").get("state", ""))
-	if abner_state == "pursuing":
-		lines.append("Abner is not patrolling now. He is following your trail.")
+	var highest_fact: Dictionary = rumor_facts[0] if not rumor_facts.is_empty() else {}
+	var highest_state := String(highest_fact.get("state", ""))
+	if highest_state == "pursuing":
+		lines.append("%s is not patrolling now. He is following your trail." % String(highest_fact.get("name", "A hostile lord")))
 	elif GameState.heat >= 25:
-		lines.append("Saul's men ask sharper questions because your name is getting hotter.")
+		lines.append("Gatekeepers and traders answer sharper questions because your name is getting hotter.")
 	else:
-		lines.append("Abner's riders are still searching by roads and gate gossip.")
+		lines.append("Most hostile riders still work from road routine and gate gossip.")
 
 	var recruit_names: Array[String] = campaign_map.get_recruitable_settlement_names()
 	if recruit_names.is_empty():
@@ -1015,6 +1041,31 @@ func _build_rumor_text() -> String:
 		lines.append("You still need %d more men before Ziklag is more than a hiding place." % remaining)
 
 	return "\n".join(lines)
+
+
+func _format_lord_rumor(fact: Dictionary) -> String:
+	var lord_name := String(fact.get("name", "a hostile lord"))
+	var direction := String(fact.get("direction", "nearby"))
+	var distance := int(float(fact.get("distance", 0.0)) / 3.0)
+	var state := String(fact.get("state", "patrol"))
+	var confidence := float(fact.get("confidence", 0.0))
+	var report_strength := "thin gossip"
+	if confidence >= 70.0:
+		report_strength = "a hard report"
+	elif confidence >= 35.0:
+		report_strength = "usable rumor"
+
+	match state:
+		"pursuing":
+			return "%s is hunting from %s, roughly %d map-paces to the %s." % [lord_name, report_strength, distance, direction]
+		"search":
+			return "%s is searching from %s, roughly %d map-paces to the %s." % [lord_name, report_strength, distance, direction]
+		"intercept":
+			return "%s has moved to block likely roads, roughly %d map-paces to the %s." % [lord_name, distance, direction]
+		"recover", "holding":
+			return "%s is said to be near town, roughly %d map-paces to the %s." % [lord_name, distance, direction]
+		_:
+			return "%s is patrolling roughly %d map-paces to the %s." % [lord_name, distance, direction]
 
 
 func _format_name_list(names: Array[String], limit: int) -> String:

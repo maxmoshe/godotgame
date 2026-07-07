@@ -1,6 +1,6 @@
 extends Node
 
-const GAME_MINUTES_PER_REAL_SECOND := 2.0
+const GAME_MINUTES_PER_REAL_SECOND := 10.0
 const RECRUIT_COOLDOWN_MINUTES := 4 * 60
 const STARTING_POSITION := Vector2(84.0, 774.0)
 const STARTING_TOTAL_MINUTES := 6 * 60
@@ -10,6 +10,7 @@ const STARTING_MORALE := 65
 const STARTING_HEAT := 0
 const OBJECTIVE_TARGET_MEN := 8
 const FOOD_TRAVEL_MINUTES_PER_UNIT := 90
+const LORD_DEFEAT_RECOVERY_MINUTES := 2 * 24 * 60
 const LORD_LOOT_TABLE := [
 	{"id": "sling_stones", "min": 6, "max": 18, "weight": 36},
 	{"id": "barley_bread", "min": 1, "max": 4, "weight": 28},
@@ -37,6 +38,7 @@ var party_data := {
 	"player_name": "David",
 	"player_health": 100,
 	"player_max_health": 100,
+	"leader_intelligence": 50,
 	"named_characters": [],
 	"generic_soldier_count": 0
 }
@@ -155,12 +157,28 @@ func clear_all_lord_pursuit_states() -> void:
 func mark_lord_defeated(lord_name: String) -> void:
 	if lord_name.is_empty():
 		return
-	defeated_lords[lord_name] = true
+	defeated_lords[lord_name] = game_total_minutes + LORD_DEFEAT_RECOVERY_MINUTES
 	clear_lord_pursuit_state(lord_name)
 
 
 func is_lord_defeated(lord_name: String) -> bool:
-	return bool(defeated_lords.get(lord_name, false))
+	var defeat_entry = defeated_lords.get(lord_name, false)
+	if defeat_entry is bool:
+		return bool(defeat_entry)
+	var recovery_minute := int(defeat_entry)
+	if recovery_minute <= 0:
+		return false
+	if game_total_minutes < recovery_minute:
+		return true
+	defeated_lords.erase(lord_name)
+	return false
+
+
+func get_lord_defeat_minutes_remaining(lord_name: String) -> int:
+	var defeat_entry = defeated_lords.get(lord_name, false)
+	if defeat_entry is bool:
+		return LORD_DEFEAT_RECOVERY_MINUTES if bool(defeat_entry) else 0
+	return maxi(0, int(defeat_entry) - game_total_minutes)
 
 
 func can_recruit_from_settlement(settlement_name: String) -> bool:
@@ -247,14 +265,16 @@ func apply_lord_combat_result(result: Dictionary) -> void:
 	var outcome := String(result.get("outcome", "retreat"))
 	var enemy_start := maxi(0, int(result.get("enemy_start_count", 0)))
 	var enemy_dead := clampi(int(result.get("enemy_dead_count", 0)), 0, enemy_start)
+	var enemy_fled := clampi(int(result.get("enemy_fled_count", 0)), 0, maxi(0, enemy_start - enemy_dead))
 	var enemy_survivors := maxi(0, enemy_start - enemy_dead)
 	var friendly_dead := maxi(0, int(result.get("friendly_dead_count", 0)))
+	var friendly_fled := maxi(0, int(result.get("friendly_fled_count", 0)))
 	var player_health := maxi(0, int(result.get("player_health", 0)))
 	var player_max_health := maxi(1, int(result.get("player_max_health", 1)))
 
 	_apply_party_combat_losses(friendly_dead, player_health, player_max_health)
 	_apply_lord_party_combat_losses(lord_name, enemy_survivors, outcome == "victory")
-	_apply_combat_campaign_notice(String(result.get("enemy_name", lord_name)), outcome, enemy_start, enemy_dead, friendly_dead)
+	_apply_combat_campaign_notice(String(result.get("enemy_name", lord_name)), outcome, enemy_start, enemy_dead, enemy_fled, friendly_dead, friendly_fled)
 	clear_combat_context()
 
 
@@ -299,31 +319,41 @@ func _apply_lord_party_combat_losses(lord_name: String, enemy_survivors: int, de
 	map_state["lord_parties"] = updated_parties
 
 
-func _apply_combat_campaign_notice(enemy_name: String, outcome: String, enemy_army_size: int, enemy_dead: int, friendly_dead: int) -> void:
+func _apply_combat_campaign_notice(enemy_name: String, outcome: String, enemy_army_size: int, enemy_dead: int, enemy_fled: int, friendly_dead: int, friendly_fled: int) -> void:
 	var casualty_text := "No men lost."
 	if friendly_dead == 1:
 		casualty_text = "1 of your men is dead."
 	elif friendly_dead > 1:
 		casualty_text = "%d of your men are dead." % friendly_dead
+	if friendly_fled == 1:
+		casualty_text += " 1 man fled the field."
+	elif friendly_fled > 1:
+		casualty_text += " %d men fled the field." % friendly_fled
+
+	var enemy_result_text := "Enemy dead: %d." % enemy_dead
+	if enemy_fled == 1:
+		enemy_result_text += " 1 enemy fled."
+	elif enemy_fled > 1:
+		enemy_result_text += " %d enemies fled." % enemy_fled
 
 	if outcome == "victory":
 		var loot := _roll_lord_victory_loot(enemy_name, enemy_army_size)
 		pending_campaign_loot = loot
 		var silver_gain := int(loot.get("silver", 0))
 		adjust_morale(5)
-		last_campaign_notice = "%s is defeated. Enemy dead: %d. Loot found: %d silver, %s. %s" % [
+		last_campaign_notice = "%s is defeated. %s Loot found: %d silver, %s. %s" % [
 			enemy_name,
-			enemy_dead,
+			enemy_result_text,
 			silver_gain,
 			_format_loot_items(Array(loot.get("items", []))),
 			casualty_text
 		]
 	elif outcome == "defeat":
 		adjust_morale(-8)
-		last_campaign_notice = "You are driven from the field by %s. Enemy dead: %d. %s" % [enemy_name, enemy_dead, casualty_text]
+		last_campaign_notice = "You are driven from the field by %s. %s %s" % [enemy_name, enemy_result_text, casualty_text]
 	else:
 		adjust_morale(-2 if friendly_dead > 0 else 0)
-		last_campaign_notice = "You break off from %s. Enemy dead: %d. %s" % [enemy_name, enemy_dead, casualty_text]
+		last_campaign_notice = "You break off from %s. %s %s" % [enemy_name, enemy_result_text, casualty_text]
 
 
 func _roll_lord_victory_loot(enemy_name: String, enemy_army_size: int) -> Dictionary:

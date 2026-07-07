@@ -6,6 +6,8 @@ Phase 1 turns the current campaign-map prototype into a playable pressure loop: 
 
 The goal is not to make a large strategy game yet. The goal is to make the road feel dangerous, choices feel consequential, and the map feel like a living problem the player is trying to survive.
 
+Status note: the first overworld AI pass is now broader than this original Phase 1 plan. Hostile lords use confidence, rumors, search, pursuit, intercept, recovery, and pressure relief instead of an Abner-only detection rule. See `docs/overworld-ai.md` for the current system.
+
 ## Player Objective
 
 The Phase 1 objective is:
@@ -32,10 +34,10 @@ If this loop works, the player should feel hunted but not helpless. Every trip s
 
 ### Lord Detection And Pursuit
 
-- Give hostile lords a detection radius drawn directly on the campaign map.
-- Abner is the main Phase 1 hunter. Other lords can keep route movement, but Abner should provide the clearest pursuit pressure.
-- When the player enters Abner's detection radius, Abner enters a pursuing state and moves toward the player instead of following his route.
-- If Abner reaches catch distance, stop player travel and open a forced lord encounter with the existing attack/combat option.
+- Give hostile lords detection radii drawn directly on the campaign map.
+- Abner is still the clearest Phase 1 hunter, but other hostile lords can also search, intercept, or pursue when they have enough evidence.
+- When a hostile lord gains a strong direct sighting or reliable report, that lord can enter a pursuing state and move toward the player instead of following his route.
+- If a hostile lord reaches catch distance, stop player travel and open a forced lord encounter with the existing attack/combat option.
 - The player can escape pursuit by increasing distance beyond an escape radius or reaching a settlement/wilderness safe condition.
 - Pursuit state should persist through ordinary campaign updates and scene returns using `GameState`.
 
@@ -64,7 +66,7 @@ Settlements and scouts should provide practical, state-based information instead
 Rumors should be generated from live campaign state:
 
 - nearest hostile lord and approximate direction
-- whether Abner is searching, pursuing, or distant
+- whether hostile lords are searching, pursuing, intercepting, recovering, or distant
 - which nearby settlements can currently recruit
 - dangerous roads or regions based on lord positions
 - whether Ziklag is reachable and what the player still lacks
@@ -128,7 +130,7 @@ Draw simple threat circles in code. Use translucent color so they communicate da
 Own the campaign loop:
 
 - advance food/morale pressure only when campaign time advances
-- ask `campaign_map.gd` to update lord pursuit
+- ask `campaign_map.gd` to update overworld AI
 - trigger forced encounters when caught
 - refresh HUD text for food, morale, heat, and objective progress
 - add settlement dialogue branches for rumors, food, hiding, and objective completion
@@ -164,9 +166,9 @@ Do not include these in Phase 1 unless they become necessary to prove the loop:
 
 Phase 1 is playable when these scenarios work:
 
-- Abner detects the player inside his visible radius and begins pursuit.
+- A hostile lord detects the player inside a visible radius and can begin pursuit.
 - The player can escape pursuit by distance or a safe settlement/wilderness action.
-- If Abner catches the player, a forced encounter opens and can enter combat.
+- If a hostile lord catches the player, a forced encounter opens and can enter combat.
 - Recruitment advances the Ziklag objective and still respects settlement cooldowns.
 - Food decreases only when campaign time advances.
 - Low food reduces morale.
