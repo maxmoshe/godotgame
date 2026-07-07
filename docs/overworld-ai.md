@@ -15,6 +15,13 @@ The public campaign-map interface is:
 - `force_player_sighting_for_debug(world_position, confidence)`: gives hostile lords a debug sighting.
 - `break_player_trail_at(world_position, reason)`: lowers hostile confidence and creates a relief window after hiding or refuge.
 
+The in-game dev panel opens with `H` and exposes the main AI debugging actions:
+
+- `AI Snapshot`: prints the current director pressure plus each lord's state, task, confidence, fatigue, supplies, and waiting town.
+- `Fake Sighting`: seeds a hostile sighting at David's current position.
+- `Advance 6h`: advances campaign AI by six hours.
+- `Break Trail`: forces a pursuit-relief state around the player.
+
 ## AI Model
 
 Each lord party keeps plain dictionary state so the prototype stays readable:
@@ -119,13 +126,13 @@ Lord personality and standing jobs are in `LORD_PARTIES`.
 - Rumor facts based on live AI state.
 - Memory entries for key lord events.
 - Debug snapshot and fake-sighting hooks.
+- Dev-panel buttons for snapshot, fake sighting, 6-hour advance, and breaking trail.
 - Defeated lord recovery timer.
 
 ## Still Not Implemented
 
 These were in the larger plan but are not done yet:
 
-- A visible in-game AI debug overlay with buttons such as "advance 6 hours" and "fake sighting".
 - A headless simulation test scene or script that advances several campaign days and asserts no lord gets stuck.
 - Real faction strategy goals beyond per-lord utility scoring and the pressure director.
 - True road-network pathfinding for searches and interceptions. Lords still mostly move directly while constrained to land.

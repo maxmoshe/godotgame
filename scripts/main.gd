@@ -26,6 +26,7 @@ const PLAYER_INTELLIGENCE_SPEED_BONUS_STAT := 50.0
 const PLAYER_INTELLIGENCE_SPEED_BONUS_MAX := 0.30
 const PLAYER_CAMPAIGN_SPEED_MULTIPLIER := 0.5
 const HIDE_MINUTES := 3 * 60
+const AI_DEBUG_ADVANCE_HOURS := 6
 const CHEAT_COMPANIONS := [
 	{"name": "Joab", "health": 120, "max_health": 120},
 	{"name": "Abishai", "health": 115, "max_health": 115},
@@ -494,13 +495,13 @@ func _build_cheat_panel() -> void:
 	_cheat_panel.offset_left = 454.0
 	_cheat_panel.offset_top = 118.0
 	_cheat_panel.offset_right = 826.0
-	_cheat_panel.offset_bottom = 456.0
+	_cheat_panel.offset_bottom = 560.0
 	_cheat_panel.add_theme_stylebox_override("panel", _make_cheat_panel_style())
 	hud.add_child(_cheat_panel)
 
 	var layout := VBoxContainer.new()
 	layout.position = Vector2(22.0, 18.0)
-	layout.size = Vector2(328.0, 300.0)
+	layout.size = Vector2(328.0, 404.0)
 	layout.add_theme_constant_override("separation", 10)
 	_cheat_panel.add_child(layout)
 
@@ -543,10 +544,20 @@ func _build_cheat_panel() -> void:
 
 	_add_cheat_button(layout, "Fill Inventory Supplies", Callable(self, "_cheat_add_inventory_supplies"), Vector2(328.0, 36.0))
 
+	var ai_debug := GridContainer.new()
+	ai_debug.columns = 2
+	ai_debug.add_theme_constant_override("h_separation", 8)
+	ai_debug.add_theme_constant_override("v_separation", 8)
+	layout.add_child(ai_debug)
+	_add_cheat_button(ai_debug, "AI Snapshot", Callable(self, "_cheat_show_ai_snapshot"))
+	_add_cheat_button(ai_debug, "Fake Sighting", Callable(self, "_cheat_fake_ai_sighting"))
+	_add_cheat_button(ai_debug, "Advance 6h", Callable(self, "_cheat_advance_ai_hours").bind(AI_DEBUG_ADVANCE_HOURS))
+	_add_cheat_button(ai_debug, "Break Trail", Callable(self, "_cheat_break_ai_trail"))
+
 	_cheat_notice_label = Label.new()
-	_cheat_notice_label.custom_minimum_size = Vector2(328.0, 44.0)
+	_cheat_notice_label.custom_minimum_size = Vector2(328.0, 118.0)
 	_cheat_notice_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_cheat_notice_label.add_theme_font_size_override("font_size", 15)
+	_cheat_notice_label.add_theme_font_size_override("font_size", 14)
 	_cheat_notice_label.add_theme_color_override("font_color", Color("#d6c391"))
 	_cheat_notice_label.text = "Press H to close."
 	layout.add_child(_cheat_notice_label)
@@ -681,12 +692,70 @@ func _cheat_add_inventory_supplies() -> void:
 	_finish_cheat(message)
 
 
+func _cheat_show_ai_snapshot() -> void:
+	_finish_cheat(_format_ai_debug_snapshot(campaign_map.get_ai_debug_snapshot()))
+
+
+func _cheat_fake_ai_sighting() -> void:
+	campaign_map.force_player_sighting_for_debug(player.global_position)
+	campaign_map.update_overworld_ai(0.1, player.global_position, _is_player_in_safe_place())
+	_finish_cheat("AI sighting seeded at David's current position.\n%s" % _format_ai_debug_snapshot(campaign_map.get_ai_debug_snapshot()))
+
+
+func _cheat_advance_ai_hours(hours: int) -> void:
+	var advanced_minutes := maxi(1, hours) * 60
+	GameState.set_game_total_minutes(GameState.get_game_total_minutes() + advanced_minutes)
+	var simulated_seconds := float(advanced_minutes) / GameState.GAME_MINUTES_PER_REAL_SECOND
+	var result: Dictionary = campaign_map.update_overworld_ai(simulated_seconds, player.global_position, _is_player_in_safe_place())
+	_update_time_label()
+	var forced_encounter = result.get("forced_encounter", {})
+	if forced_encounter is Dictionary and not Dictionary(forced_encounter).is_empty():
+		_finish_cheat("Advanced AI %dh. %s caught the player." % [hours, String(Dictionary(forced_encounter).get("name", "A hostile lord"))])
+		_force_lord_encounter(Dictionary(forced_encounter))
+		return
+	_finish_cheat("Advanced AI %dh.\n%s" % [hours, _format_ai_debug_snapshot(campaign_map.get_ai_debug_snapshot())])
+
+
+func _cheat_break_ai_trail() -> void:
+	campaign_map.break_player_trail_at(player.global_position, "dev break trail")
+	campaign_map.update_overworld_ai(0.1, player.global_position, true)
+	GameState.clear_all_lord_pursuit_states()
+	_finish_cheat("Trail broken for hostile lords.\n%s" % _format_ai_debug_snapshot(campaign_map.get_ai_debug_snapshot()))
+
+
 func _finish_cheat(message: String) -> void:
 	GameState.last_campaign_notice = "Dev cheat: %s" % message
 	_save_campaign_state()
 	_update_status_label()
 	if _cheat_notice_label != null:
 		_cheat_notice_label.text = message
+
+
+func _format_ai_debug_snapshot(snapshot: Dictionary) -> String:
+	var director := Dictionary(snapshot.get("director", {}))
+	var lines := PackedStringArray()
+	lines.append("AI minute %d | pressure %d | heat %d" % [
+		int(snapshot.get("minute", GameState.get_game_total_minutes())),
+		int(round(float(director.get("pressure_score", 0.0)))),
+		GameState.heat
+	])
+	for raw_lord in Array(snapshot.get("lords", [])):
+		if not (raw_lord is Dictionary):
+			continue
+		var lord := Dictionary(raw_lord)
+		var task := Dictionary(lord.get("task", {}))
+		var knowledge := Dictionary(lord.get("knowledge", {}))
+		var name := String(lord.get("name", "Lord"))
+		var short_name := name.split(" ", false)[0]
+		var state := String(lord.get("state", ""))
+		var task_type := String(task.get("type", "none"))
+		var confidence := int(round(float(knowledge.get("confidence", 0.0))))
+		var fatigue := int(round(float(lord.get("fatigue", 0.0))))
+		var supplies := int(round(float(lord.get("supplies", 0.0))))
+		var waiting_at := String(lord.get("waiting_at", ""))
+		var place_text := "" if waiting_at.is_empty() else " @%s" % waiting_at
+		lines.append("%s: %s/%s c%d f%d s%d%s" % [short_name, state, task_type, confidence, fatigue, supplies, place_text])
+	return "\n".join(lines)
 
 
 func _format_signed_amount(amount: int) -> String:
