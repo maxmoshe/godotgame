@@ -27,3 +27,4 @@ run_godot_check() {
 
 run_godot_check "campaign startup"
 run_godot_check "combat test startup" "res://scenes/combat_test.tscn"
+run_godot_check "quaternius visual test startup" "res://scenes/dev/quaternius_visual_test.tscn"

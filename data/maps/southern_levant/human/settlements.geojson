@@ -435,7 +435,7 @@
         "water_access": 3,
         "defense_bonus": 4,
         "settlement_density": 5,
-        "notes": "Conventionally identified with Tell es-Safi; major Philistine center.",
+        "notes": "Tell es-Safi/Tel Zafit, widely identified with Gath; major Philistine center.",
         "settlement_class": "city_state",
         "site_role": [
           "philistine_capital",
@@ -448,8 +448,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          34.85,
-          31.7
+          34.84694,
+          31.70417
         ]
       }
     },
@@ -469,7 +469,7 @@
         "water_access": 4,
         "defense_bonus": 3,
         "settlement_density": 5,
-        "notes": "Coastal city with port and trade value.",
+        "notes": "Tel Ashkelon/ancient Ascalon coastal site, with port and trade value.",
         "settlement_class": "port_city",
         "site_role": [
           "philistine_capital",
@@ -482,8 +482,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          34.56,
-          31.67
+          34.54611,
+          31.66194
         ]
       }
     },
@@ -492,7 +492,7 @@
       "id": "gaza",
       "properties": {
         "name": "Gaza",
-        "kind": "Philistine port",
+        "kind": "Philistine city",
         "era_tags": [
           "bronze_age",
           "iron_age"
@@ -503,21 +503,22 @@
         "water_access": 3,
         "defense_bonus": 3,
         "settlement_density": 5,
-        "notes": "Southern coastal hub and Egypt-road gateway.",
-        "settlement_class": "port_city",
+        "notes": "Historic Gaza core/Old City tell, the southern coastal hub and Egypt-road gateway.",
+        "settlement_class": "city_state",
         "site_role": [
           "philistine_capital",
-          "egypt_road_gateway"
+          "egypt_road_gateway",
+          "maritime_trade"
         ],
         "fortification_level": 3,
         "classification_confidence": "high",
-        "location_class_label": "Port City"
+        "location_class_label": "City-State"
       },
       "geometry": {
         "type": "Point",
         "coordinates": [
-          34.47,
-          31.5
+          34.46333,
+          31.50333
         ]
       }
     },
@@ -536,7 +537,7 @@
         "water_access": 3,
         "defense_bonus": 3,
         "settlement_density": 5,
-        "notes": "One of the Philistine pentapolis centers.",
+        "notes": "Tel Ashdod/Isdud, south of modern Ashdod; one of the Philistine pentapolis centers.",
         "settlement_class": "city_state",
         "site_role": [
           "philistine_capital"
@@ -548,8 +549,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          34.65,
-          31.8
+          34.66167,
+          31.75361
         ]
       }
     },
@@ -568,7 +569,7 @@
         "water_access": 3,
         "defense_bonus": 3,
         "settlement_density": 4,
-        "notes": "Inland Philistine center near the Shephelah edge.",
+        "notes": "Tel Miqne/Khirbet el-Muqanna, inland Philistine center near the Shephelah edge.",
         "settlement_class": "city_state",
         "site_role": [
           "philistine_capital",
@@ -581,8 +582,8 @@
       "geometry": {
         "type": "Point",
         "coordinates": [
-          34.85,
-          31.87
+          34.8499203,
+          31.77889
         ]
       }
     },
@@ -1291,176 +1292,6 @@
         "coordinates": [
           35.79,
           31.72
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "id": "nebo",
-      "properties": {
-        "name": "Nebo",
-        "kind": "Ridge shrine",
-        "era_tags": [
-          "bronze_age",
-          "iron_age"
-        ],
-        "owner_faction": "Moab",
-        "confidence": "medium",
-        "supply_value": 2,
-        "water_access": 2,
-        "defense_bonus": 4,
-        "settlement_density": 2,
-        "label_tier": "minor",
-        "notes": "Moabite ridge settlement and shrine zone overlooking the Jordan approaches.",
-        "settlement_class": "shrine_village",
-        "site_role": [
-          "ridge_shrine",
-          "lookout"
-        ],
-        "fortification_level": 2,
-        "classification_confidence": "medium",
-        "location_class_label": "Shrine Village"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          35.73,
-          31.77
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "id": "baal_meon",
-      "properties": {
-        "name": "Baal-meon",
-        "kind": "Cult village",
-        "era_tags": [
-          "iron_age"
-        ],
-        "owner_faction": "Moab",
-        "confidence": "medium",
-        "supply_value": 3,
-        "water_access": 2,
-        "defense_bonus": 2,
-        "settlement_density": 3,
-        "label_tier": "minor",
-        "notes": "Moabite plateau village set between Medeba and Dibon.",
-        "settlement_class": "village",
-        "site_role": [
-          "cult_site",
-          "rural_supply"
-        ],
-        "fortification_level": 1,
-        "classification_confidence": "medium",
-        "location_class_label": "Village"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          35.73,
-          31.68
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "id": "ataroth_moab",
-      "properties": {
-        "name": "Ataroth",
-        "kind": "Moabite village",
-        "era_tags": [
-          "iron_age"
-        ],
-        "owner_faction": "Moab",
-        "confidence": "medium",
-        "supply_value": 3,
-        "water_access": 2,
-        "defense_bonus": 3,
-        "settlement_density": 3,
-        "label_tier": "minor",
-        "notes": "Moabite plateau village placed north of the Arnon corridor.",
-        "settlement_class": "village",
-        "site_role": [
-          "rural_supply",
-          "plateau_waypoint"
-        ],
-        "fortification_level": 2,
-        "classification_confidence": "medium",
-        "location_class_label": "Village"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          35.74,
-          31.59
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "id": "aroer_arnon",
-      "properties": {
-        "name": "Aroer",
-        "kind": "Arnon watch",
-        "era_tags": [
-          "iron_age"
-        ],
-        "owner_faction": "Moab",
-        "confidence": "medium",
-        "supply_value": 2,
-        "water_access": 2,
-        "defense_bonus": 4,
-        "settlement_density": 2,
-        "label_tier": "minor",
-        "notes": "Settlement above the Arnon gorge, guarding the north-south plateau road.",
-        "settlement_class": "watch_village",
-        "site_role": [
-          "gorge_watch",
-          "border_control"
-        ],
-        "fortification_level": 3,
-        "classification_confidence": "medium",
-        "location_class_label": "Watch Village"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          35.82,
-          31.46
-        ]
-      }
-    },
-    {
-      "type": "Feature",
-      "id": "ar_moab",
-      "properties": {
-        "name": "Ar",
-        "kind": "Moabite town",
-        "era_tags": [
-          "iron_age"
-        ],
-        "owner_faction": "Moab",
-        "confidence": "low",
-        "supply_value": 3,
-        "water_access": 2,
-        "defense_bonus": 3,
-        "settlement_density": 3,
-        "label_tier": "minor",
-        "notes": "Traditional Moabite town name placed on the central plateau for density and route play.",
-        "settlement_class": "town",
-        "site_role": [
-          "moabite_plateau_node"
-        ],
-        "fortification_level": 2,
-        "classification_confidence": "low",
-        "location_class_label": "Town"
-      },
-      "geometry": {
-        "type": "Point",
-        "coordinates": [
-          35.74,
-          31.31
         ]
       }
     },

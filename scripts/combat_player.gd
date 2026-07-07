@@ -16,6 +16,11 @@ const SLING_CHARGE_ROTATIONS := 2.0
 const SLING_FULL_CHARGE_PHASE := TAU * SLING_CHARGE_ROTATIONS
 const SLING_FULL_SPEED := 14.0
 const SLING_RELEASE_WINDOW_SECONDS := 0.25
+const BASE_CAMERA_FOV := 70.0
+const AIM_ZOOM_MULTIPLIER := 1.5
+const CAMERA_ZOOM_LERP_SPEED := 14.0
+const BACKPEDAL_SPEED_DIVISOR := 2.0
+const STRAFE_SPEED_DIVISOR := 1.3
 
 @export var move_speed := 6.0
 @export var sprint_multiplier := 1.45
@@ -61,7 +66,7 @@ var _damage_invulnerability_time := 0.0
 
 func _ready() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
-	camera.fov = 70.0
+	camera.fov = BASE_CAMERA_FOV
 	body_mesh.visible = false
 	health = max_health
 	_build_sling_view_model()
@@ -108,6 +113,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	damage_flash_time = maxf(0.0, damage_flash_time - delta)
 	_damage_invulnerability_time = maxf(0.0, _damage_invulnerability_time - delta)
+	_update_camera_zoom(delta)
 	_update_sling_view_model(delta)
 
 
@@ -117,9 +123,10 @@ func _physics_process(delta: float) -> void:
 
 	var grounded := is_on_floor()
 	var input_vector := _movement_input()
+	var adjusted_input := _adjusted_local_movement(input_vector)
 	var forward := -global_transform.basis.z
 	var right := global_transform.basis.x
-	var direction := (forward * input_vector.y + right * input_vector.x).normalized()
+	var direction := forward * adjusted_input.y + right * adjusted_input.x
 	var speed := move_speed
 	if charging or sling_release_queued:
 		speed *= charging_move_multiplier
@@ -192,9 +199,30 @@ func _movement_input() -> Vector2:
 	return input_vector.normalized()
 
 
+func _adjusted_local_movement(input_vector: Vector2) -> Vector2:
+	var adjusted := input_vector
+	adjusted.x /= STRAFE_SPEED_DIVISOR
+	if adjusted.y < 0.0:
+		adjusted.y /= BACKPEDAL_SPEED_DIVISOR
+	return adjusted
+
+
 func _apply_camera_rotation() -> void:
 	rotation.y = yaw
 	camera_pivot.rotation.x = pitch
+
+
+func _update_camera_zoom(delta: float) -> void:
+	if camera == null:
+		return
+	var target_fov := BASE_CAMERA_FOV
+	if aiming:
+		target_fov = _fov_for_zoom_multiplier(BASE_CAMERA_FOV, AIM_ZOOM_MULTIPLIER)
+	camera.fov = lerpf(camera.fov, target_fov, clampf(CAMERA_ZOOM_LERP_SPEED * delta, 0.0, 1.0))
+
+
+func _fov_for_zoom_multiplier(base_fov: float, zoom_multiplier: float) -> float:
+	return rad_to_deg(atan(tan(deg_to_rad(base_fov) * 0.5) / zoom_multiplier) * 2.0)
 
 
 func _throw_stone(charge_ratio: float) -> void:

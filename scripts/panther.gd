@@ -112,10 +112,14 @@ func take_hit(damage: int) -> void:
 
 func take_projectile_hit(damage: int, hit_position: Vector3) -> int:
 	var final_damage := damage
-	if _is_headshot(hit_position):
+	if is_projectile_headshot(hit_position):
 		final_damage *= HEADSHOT_MULTIPLIER
 	_apply_damage(final_damage)
 	return final_damage
+
+
+func is_projectile_headshot(hit_position: Vector3, hit_shape_name := "") -> bool:
+	return hit_shape_name == "HeadHitShape" or _is_headshot(hit_position)
 
 
 func _apply_damage(damage: int) -> void:

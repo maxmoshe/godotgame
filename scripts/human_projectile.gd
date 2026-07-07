@@ -1,6 +1,9 @@
 extends Area3D
 
 const LIFE_SECONDS := 4.0
+const FRIENDLY_BLOCKS_ARROW := true
+const WORLD_COLLISION_MASK := 1
+const SOLDIER_COLLISION_LAYER := 2
 
 var velocity := Vector3.ZERO
 var damage := 1
@@ -39,6 +42,7 @@ func _check_hit() -> void:
 
 	var query := PhysicsRayQueryParameters3D.create(_previous_position, global_position)
 	query.exclude = [self]
+	query.collision_mask = WORLD_COLLISION_MASK | SOLDIER_COLLISION_LAYER
 	if source != null:
 		query.exclude.append(source)
 
@@ -52,6 +56,8 @@ func _check_hit() -> void:
 		return
 
 	if collider.has_method("get_faction") and collider.get_faction() == faction:
+		if FRIENDLY_BLOCKS_ARROW:
+			queue_free()
 		return
 
 	var shape_name := _hit_shape_name(hit)

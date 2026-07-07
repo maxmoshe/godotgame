@@ -33,6 +33,22 @@ const LORD_RUMOR_RADIUS := 780.0
 const LORD_SEARCH_RADIUS := 300.0
 const LORD_SEARCH_ARRIVAL_RADIUS := 58.0
 const LORD_CATCH_RADIUS := 42.0
+const LORD_COMBAT_REINFORCE_RADIUS := 540.0
+const LORD_COMBAT_REINFORCE_LIMIT := 3
+const LORD_GROUP_UP_RADIUS := 920.0
+const LORD_GROUP_UP_ARRIVAL_RADIUS := 82.0
+const LORD_WEAK_SOLO_RATIO := 0.72
+const LORD_CAUTIOUS_SOLO_RATIO := 0.92
+const LORD_CONFIDENT_GROUP_RATIO := 1.12
+const LORD_ORDINARY_TARGET_NOTICE_MULTIPLIER := 0.62
+const LORD_OPPORTUNISTIC_SOLO_RATIO := 1.18
+const LORD_OPPORTUNISTIC_SUPPORTED_RATIO := 1.06
+const LORD_WEAK_FLEE_RADIUS := 440.0
+const LORD_WEAK_FLEE_CLEAR_RADIUS := 680.0
+const LORD_FLEE_TARGET_DISTANCE := 760.0
+const LORD_FLEE_SPEED_MULTIPLIER := 1.34
+const LORD_ABSORBED_TOWN_RADIUS := 92.0
+const LORD_MUSTER_LOITER_RADIUS := 74.0
 const LORD_PURSUIT_SPEED_MULTIPLIER := 1.26
 const LORD_SEARCH_SPEED_MULTIPLIER := 0.92
 const LORD_DIRECT_SIGHT_CONFIDENCE := 94.0
@@ -45,6 +61,12 @@ const LORD_RECOVER_FATIGUE_THRESHOLD := 72.0
 const LORD_RESUPPLY_THRESHOLD := 32.0
 const LORD_RECOVERY_DWELL_MINUTES := Vector2(180.0, 480.0)
 const LORD_MEMORY_LIMIT := 8
+const LORD_MEMORY_EFFECT_DAYS := 4.0
+const LORD_ROAD_GRAPH_MERGE_DISTANCE := 54.0
+const LORD_ROAD_GRAPH_CONNECT_DISTANCE := 95.0
+const LORD_ROAD_GUIDANCE_MIN_DISTANCE := 420.0
+const LORD_ROAD_REJOIN_RADIUS := 80.0
+const LORD_ROAD_MAX_DETOUR_MULTIPLIER := 1.9
 const NPC_RENDER_RADIUS_BASE := 900.0
 const NPC_FADE_BAND_BASE := 200.0
 const NPC_ZOOM_REFERENCE := 0.82
@@ -301,6 +323,8 @@ var _chokepoint_features: Array = []
 var _land_travel_polygons: Array[PackedVector2Array] = []
 var _blocked_water_polygons: Array[PackedVector2Array] = []
 var _settlement_entries: Array[Dictionary] = []
+var _road_graph_points: Array = []
+var _road_graph_edges: Array = []
 var _painted_map_plate: Texture2D
 var _map_render_calibration: Dictionary = {}
 var _map_calibration_id := ""
@@ -353,6 +377,28 @@ func update_lord_pressure(real_seconds: float, player_position: Vector2, player_
 	if forced_encounter is Dictionary:
 		return Dictionary(forced_encounter)
 	return {}
+
+
+func get_combat_map_context(position: Vector2) -> Dictionary:
+	var safe_position := constrain_land_position(position, position)
+	var biome_feature := _combat_biome_feature_at(safe_position)
+	if biome_feature.is_empty():
+		biome_feature = _nearest_combat_biome_feature(safe_position)
+	if biome_feature.is_empty():
+		return _fallback_combat_map_context(safe_position)
+
+	var feature_properties := Dictionary(biome_feature.get("properties", {})).duplicate(true)
+	var context := {
+		"campaign_position": safe_position,
+		"biome_id": int(feature_properties.get("biome_id", 3)),
+		"biome_key": String(biome_feature.get("id", "biome_central_highlands")),
+		"biome_name": String(feature_properties.get("name", "Central highlands")),
+		"biome_properties": feature_properties
+	}
+	var relief_context := _combat_relief_context_at(safe_position)
+	for key in relief_context.keys():
+		context[key] = relief_context[key]
+	return context
 
 
 func update_overworld_ai(real_seconds: float, player_position: Vector2, player_is_safe: bool) -> Dictionary:
@@ -421,6 +467,7 @@ func get_rumor_facts(world_position: Vector2) -> Array[Dictionary]:
 		var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
 		var distance := world_position.distance_to(lord_position)
 		var knowledge := _lord_local_knowledge(lord)
+		var legacy_profile := _lord_legacy_profile(lord)
 		facts.append({
 			"type": "lord",
 			"name": String(lord.get("name", "Unknown lord")),
@@ -432,7 +479,9 @@ func get_rumor_facts(world_position: Vector2) -> Array[Dictionary]:
 			"direction": _direction_text(lord_position - world_position),
 			"confidence": float(knowledge.get("confidence", 0.0)),
 			"knowledge_source": String(knowledge.get("source", "")),
-			"last_seen_minute": int(knowledge.get("minute", -1))
+			"last_seen_minute": int(knowledge.get("minute", -1)),
+			"history_rank": String(legacy_profile.get("label", "unknown")),
+			"nemesis_score": float(legacy_profile.get("nemesis_score", 0.0))
 		})
 	facts.sort_custom(Callable(self, "_compare_rumor_facts"))
 	return facts
@@ -442,6 +491,10 @@ func get_ai_debug_snapshot() -> Dictionary:
 	var lord_snapshots: Array[Dictionary] = []
 	for lord in _lord_parties:
 		var knowledge := _lord_local_knowledge(lord)
+		var memory_profile := _lord_memory_profile(lord)
+		var legacy_profile := _lord_legacy_profile(lord)
+		var strength_profile := _lord_strength_profile(lord)
+		var coordination := _coordination_role_for(lord, _active_pursuer_count(String(lord.get("name", ""))) > 0, float(_overworld_ai_director().get("pressure_score", 0.0)), false)
 		lord_snapshots.append({
 			"name": String(lord.get("name", "")),
 			"state": String(lord.get("state", "")),
@@ -452,12 +505,17 @@ func get_ai_debug_snapshot() -> Dictionary:
 			"supplies": float(lord.get("supplies", 0.0)),
 			"fatigue": float(lord.get("fatigue", 0.0)),
 			"knowledge": knowledge,
-			"memory": Array(lord.get("memory", [])).duplicate(true)
+			"memory": Array(lord.get("memory", [])).duplicate(true),
+			"memory_profile": memory_profile,
+			"legacy_profile": legacy_profile,
+			"strength_profile": strength_profile,
+			"coordination_role": String(coordination.get("id", "routine"))
 		})
 	return {
 		"minute": GameState.get_game_total_minutes(),
 		"director": Dictionary(GameState.map_state.get("overworld_ai", {})).duplicate(true),
-		"lords": lord_snapshots
+		"lords": lord_snapshots,
+		"road_graph_nodes": _road_graph_points.size()
 	}
 
 
@@ -469,6 +527,54 @@ func force_player_sighting_for_debug(world_position: Vector2, confidence: float 
 		lord = _set_lord_knowledge(lord, world_position, confidence, "debug sighting")
 		lord["next_plan_minute"] = 0
 		_lord_parties[index] = lord
+	queue_redraw()
+
+
+func seed_nemesis_for_debug(world_position: Vector2) -> Dictionary:
+	var best_index := -1
+	var best_distance := INF
+	for index in range(_lord_parties.size()):
+		var lord := _ensure_lord_ai_state(_lord_parties[index])
+		if not _is_hostile_lord(lord):
+			continue
+		var distance := Vector2(lord.get("pos", Vector2.ZERO)).distance_to(world_position)
+		if distance < best_distance:
+			best_distance = distance
+			best_index = index
+
+	if best_index < 0:
+		return {}
+
+	var lord := _ensure_lord_ai_state(_lord_parties[best_index])
+	var lord_name := String(lord.get("name", ""))
+	GameState.record_lord_history_event(lord_name, "sighting", {"text": "Debug nemesis seed: a remembered sighting.", "position": world_position})
+	GameState.record_lord_history_event(lord_name, "safe_escape", {"text": "Debug nemesis seed: the player band escaped once.", "position": world_position})
+	GameState.record_lord_history_event(lord_name, "defeated_by_player", {"text": "Debug nemesis seed: the player band humiliated this lord.", "position": world_position})
+	lord = _set_lord_knowledge(lord, world_position, LORD_DIRECT_SIGHT_CONFIDENCE, "debug nemesis")
+	lord["next_plan_minute"] = 0
+	_lord_parties[best_index] = lord
+	queue_redraw()
+	return GameState.get_lord_history(lord_name)
+
+
+func _debug_replace_lord_parties_for_sim(lords: Array) -> void:
+	_lord_parties.clear()
+	for raw_lord in lords:
+		if not (raw_lord is Dictionary):
+			continue
+		var lord := Dictionary(raw_lord).duplicate(true)
+		var position := Vector2(lord.get("pos", lord.get("start", Vector2.ZERO)))
+		var fallback := Vector2(lord.get("start", position))
+		lord["pos"] = constrain_land_position(position, fallback)
+		if not lord.has("route"):
+			lord["route"] = [lord["pos"]]
+		if not lord.has("route_index"):
+			lord["route_index"] = 0
+		lord = _ensure_lord_ai_state(lord)
+		lord["hold_minutes"] = maxf(0.0, float(lord.get("hold_minutes", 0.0)))
+		lord["waiting_at"] = String(lord.get("waiting_at", ""))
+		lord["next_plan_minute"] = int(lord.get("next_plan_minute", 0))
+		_lord_parties.append(lord)
 	queue_redraw()
 
 
@@ -488,6 +594,7 @@ func break_player_trail_at(world_position: Vector2, reason: String = "hiding") -
 		knowledge["source"] = reason
 		lord["local_knowledge"] = knowledge
 		if String(lord.get("state", "")) == "pursuing":
+			lord = _remember_lord_event(lord, "safe_escape", "The player band vanished into refuge: %s." % reason, world_position)
 			GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
 			lord["state"] = "search" if confidence >= LORD_SEARCH_CONFIDENCE_MIN else "recover"
 			lord["next_plan_minute"] = 0
@@ -510,32 +617,32 @@ func get_lord_save_data() -> Array:
 		var lord_name := String(lord.get("name", ""))
 		if GameState.is_lord_defeated(lord_name):
 			continue
-			save_data.append({
-				"name": lord_name,
-				"map_projection_id": _active_map_projection_id(),
-				"pos": lord.get("pos", Vector2.ZERO),
-				"route_index": int(lord.get("route_index", 1)),
-				"party_size": int(lord.get("party_size", 0)),
-				"intelligence": int(lord.get("intelligence", 0)),
-				"hold_minutes": float(lord.get("hold_minutes", 0.0)),
-				"waiting_at": String(lord.get("waiting_at", "")),
-				"role": String(lord.get("role", _default_lord_role(lord))),
-				"state": String(lord.get("state", "patrol")),
-				"task": _lord_task_data(lord),
-				"standing_order": String(lord.get("standing_order", _lord_task_type(lord))),
-				"supplies": float(lord.get("supplies", 100.0)),
-				"morale": float(lord.get("morale", 65.0)),
-				"fatigue": float(lord.get("fatigue", 0.0)),
-				"boldness": float(lord.get("boldness", 50.0)),
-				"caution": float(lord.get("caution", 50.0)),
-				"ambition": float(lord.get("ambition", 50.0)),
-				"loyalty": float(lord.get("loyalty", 50.0)),
-				"local_knowledge": _lord_local_knowledge(lord),
-				"last_player_sighting": _lord_local_knowledge(lord),
-				"memory": Array(lord.get("memory", [])).duplicate(true),
-				"next_plan_minute": int(lord.get("next_plan_minute", GameState.get_game_total_minutes())),
-				"recovery_until_minute": int(lord.get("recovery_until_minute", 0))
-			})
+		save_data.append({
+			"name": lord_name,
+			"map_projection_id": _active_map_projection_id(),
+			"pos": lord.get("pos", Vector2.ZERO),
+			"route_index": int(lord.get("route_index", 1)),
+			"party_size": int(lord.get("party_size", 0)),
+			"intelligence": int(lord.get("intelligence", 0)),
+			"hold_minutes": float(lord.get("hold_minutes", 0.0)),
+			"waiting_at": String(lord.get("waiting_at", "")),
+			"role": String(lord.get("role", _default_lord_role(lord))),
+			"state": String(lord.get("state", "patrol")),
+			"task": _lord_task_data(lord),
+			"standing_order": String(lord.get("standing_order", _lord_task_type(lord))),
+			"supplies": float(lord.get("supplies", 100.0)),
+			"morale": float(lord.get("morale", 65.0)),
+			"fatigue": float(lord.get("fatigue", 0.0)),
+			"boldness": float(lord.get("boldness", 50.0)),
+			"caution": float(lord.get("caution", 50.0)),
+			"ambition": float(lord.get("ambition", 50.0)),
+			"loyalty": float(lord.get("loyalty", 50.0)),
+			"local_knowledge": _lord_local_knowledge(lord),
+			"last_player_sighting": _lord_local_knowledge(lord),
+			"memory": Array(lord.get("memory", [])).duplicate(true),
+			"next_plan_minute": int(lord.get("next_plan_minute", GameState.get_game_total_minutes())),
+			"recovery_until_minute": int(lord.get("recovery_until_minute", 0))
+		})
 	return save_data
 
 
@@ -559,7 +666,7 @@ func get_hovered_location(world_position: Vector2) -> Dictionary:
 		var settlement_position := _map_position_from_entry(settlement)
 		var distance := world_position.distance_to(settlement_position)
 		if distance <= _settlement_hover_radius(settlement) and distance < best_distance:
-			best = _target_from_entry(settlement, "settlement")
+			best = _settlement_target_with_lord_presence(settlement)
 			best_distance = distance
 
 	return best
@@ -570,6 +677,8 @@ func get_click_target(world_position: Vector2, radius: float = 42.0) -> Dictiona
 	var best_distance := radius
 
 	for lord in _lord_parties:
+		if _is_lord_absorbed(lord):
+			continue
 		var lord_position: Vector2 = lord["pos"]
 		var lord_distance := world_position.distance_to(lord_position)
 		if lord_distance <= best_distance:
@@ -596,8 +705,167 @@ func get_click_target(world_position: Vector2, radius: float = 42.0) -> Dictiona
 func get_lord_target(lord_name: String) -> Dictionary:
 	for lord in _lord_parties:
 		if String(lord.get("name", "")) == lord_name:
+			if _is_lord_absorbed(lord):
+				return {}
 			return _target_from_lord(lord)
 	return {}
+
+
+func _settlement_target_with_lord_presence(settlement: Dictionary) -> Dictionary:
+	var target := _target_from_entry(settlement, "settlement")
+	var absorbed_lords := _absorbed_lords_at_settlement(String(target.get("name", "")))
+	if not absorbed_lords.is_empty():
+		target["contained_lords"] = absorbed_lords
+		target["grouped_lords"] = absorbed_lords
+		target["group_count"] = absorbed_lords.size()
+	return target
+
+
+func _absorbed_lords_at_settlement(settlement_name: String) -> Array[Dictionary]:
+	var absorbed_lords: Array[Dictionary] = []
+	if settlement_name.is_empty():
+		return absorbed_lords
+	for lord in _lord_parties:
+		if not (lord is Dictionary):
+			continue
+		var lord_dict := Dictionary(lord)
+		var absorption := _lord_absorption_info(lord_dict)
+		if String(absorption.get("kind", "")) != "settlement":
+			continue
+		if String(absorption.get("name", "")) != settlement_name:
+			continue
+		absorbed_lords.append(_lord_presence_summary(lord_dict))
+	absorbed_lords.sort_custom(Callable(self, "_compare_lord_presence_name"))
+	return absorbed_lords
+
+
+func _is_lord_absorbed(lord: Dictionary) -> bool:
+	return not _lord_absorption_info(lord).is_empty()
+
+
+func _lord_absorption_info(lord: Dictionary) -> Dictionary:
+	var lord_name := String(lord.get("name", ""))
+	if lord_name.is_empty() or GameState.is_lord_defeated(lord_name):
+		return {}
+
+	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+	var waiting_at := String(lord.get("waiting_at", "")).strip_edges()
+	var hold_minutes := float(lord.get("hold_minutes", 0.0))
+	if hold_minutes > 0.0 and not waiting_at.is_empty():
+		var settlement_position := _position_for_named_settlement(waiting_at, Vector2.INF)
+		if settlement_position != Vector2.INF and lord_position.distance_to(settlement_position) <= LORD_ABSORBED_TOWN_RADIUS:
+			return {
+				"kind": "settlement",
+				"name": waiting_at,
+				"pos": settlement_position
+			}
+		var nearby_settlement := get_nearest_settlement(lord_position, LORD_ABSORBED_TOWN_RADIUS)
+		if not nearby_settlement.is_empty():
+			return {
+				"kind": "settlement",
+				"name": String(nearby_settlement.get("name", "")),
+				"pos": Vector2(nearby_settlement.get("pos", lord_position))
+			}
+
+	return {}
+
+
+func _lord_presence_summary(lord: Dictionary) -> Dictionary:
+	return {
+		"lord_id": String(lord.get("name", "")),
+		"name": String(lord.get("name", "Unknown lord")),
+		"title": String(lord.get("title", "lord")),
+		"faction": String(lord.get("faction", "")),
+		"party_size": int(lord.get("party_size", 0)),
+		"state": String(lord.get("state", "")),
+		"task_type": _lord_task_type(lord),
+		"waiting_at": String(lord.get("waiting_at", ""))
+	}
+
+
+func _compare_lord_presence_name(left, right) -> bool:
+	return String(Dictionary(left).get("name", "")) < String(Dictionary(right).get("name", ""))
+
+
+func get_lord_combat_reinforcements(target_lord: Dictionary) -> Array[Dictionary]:
+	var reinforcements: Array[Dictionary] = []
+	if not _is_hostile_lord(target_lord):
+		return reinforcements
+
+	var target_name := String(target_lord.get("lord_id", target_lord.get("name", "")))
+	var target_position := Vector2(target_lord.get("pos", Vector2.INF))
+	if target_position == Vector2.INF:
+		return reinforcements
+
+	for lord in _lord_parties:
+		var lord_name := String(lord.get("name", ""))
+		if lord_name == target_name or GameState.is_lord_defeated(lord_name):
+			continue
+		if not _lord_can_join_common_enemy_fight(lord, target_lord):
+			continue
+		var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+		var distance := lord_position.distance_to(target_position)
+		if distance > LORD_COMBAT_REINFORCE_RADIUS:
+			continue
+		reinforcements.append({
+			"lord_id": lord_name,
+			"name": lord_name,
+			"title": String(lord.get("title", "ally")),
+			"faction": String(lord.get("faction", "")),
+			"party_size": int(lord.get("party_size", 0)),
+			"distance": distance,
+			"direction": _direction_text(lord_position - target_position)
+		})
+
+	reinforcements.sort_custom(Callable(self, "_compare_reinforcement_distance"))
+	if reinforcements.size() > LORD_COMBAT_REINFORCE_LIMIT:
+		reinforcements = reinforcements.slice(0, LORD_COMBAT_REINFORCE_LIMIT)
+	return reinforcements
+
+
+func get_enemy_lord_combat_reinforcements(target_lord: Dictionary) -> Array[Dictionary]:
+	var reinforcements: Array[Dictionary] = []
+	if not _is_hostile_lord(target_lord):
+		return reinforcements
+
+	var target_name := String(target_lord.get("lord_id", target_lord.get("name", "")))
+	var target_position := Vector2(target_lord.get("pos", Vector2.INF))
+	if target_position == Vector2.INF:
+		for lord in _lord_parties:
+			if String(lord.get("name", "")) == target_name:
+				target_position = Vector2(lord.get("pos", Vector2.INF))
+				break
+	if target_position == Vector2.INF:
+		return reinforcements
+
+	for lord in _lord_parties:
+		var lord_name := String(lord.get("name", ""))
+		if lord_name == target_name or GameState.is_lord_defeated(lord_name):
+			continue
+		if not _lords_can_group_for_hunt(target_lord, lord):
+			continue
+		var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+		var distance := lord_position.distance_to(target_position)
+		if distance > LORD_COMBAT_REINFORCE_RADIUS:
+			continue
+		reinforcements.append({
+			"lord_id": lord_name,
+			"name": lord_name,
+			"title": String(lord.get("title", "lord")),
+			"faction": String(lord.get("faction", "")),
+			"party_size": int(lord.get("party_size", 0)),
+			"distance": distance,
+			"direction": _direction_text(lord_position - target_position)
+		})
+
+	reinforcements.sort_custom(Callable(self, "_compare_reinforcement_distance"))
+	if reinforcements.size() > LORD_COMBAT_REINFORCE_LIMIT:
+		reinforcements = reinforcements.slice(0, LORD_COMBAT_REINFORCE_LIMIT)
+	return reinforcements
+
+
+func _compare_reinforcement_distance(left, right) -> bool:
+	return float(Dictionary(left).get("distance", INF)) < float(Dictionary(right).get("distance", INF))
 
 
 func _draw() -> void:
@@ -722,6 +990,9 @@ func _draw_settlements() -> void:
 		draw_circle(pos, 7.4 * s * marker_scale, ring)
 		draw_circle(pos, marker_radius, fill)
 		draw_circle(pos + Vector2(-2.0 * s * marker_scale, -2.0 * s * marker_scale), 2.0 * s * marker_scale, fill.lightened(0.55))
+		var absorbed_lord_count := _absorbed_lords_at_settlement(String(settlement.get("name", ""))).size()
+		if absorbed_lord_count > 0:
+			_draw_lord_presence_badge(pos + Vector2(13.0 * s * marker_scale, -13.0 * s * marker_scale), absorbed_lord_count, s)
 
 		if _font and _should_draw_settlement_label(settlement):
 			var font_size := _settlement_label_size(settlement) * s
@@ -776,6 +1047,8 @@ func _draw_npc_parties() -> void:
 
 func _draw_lord_parties() -> void:
 	for lord in _lord_parties:
+		if _is_lord_absorbed(lord):
+			continue
 		var pos: Vector2 = lord["pos"]
 		var distance := pos.distance_to(player_position)
 		if distance > _effective_npc_render_radius():
@@ -821,6 +1094,28 @@ func _draw_lord_parties() -> void:
 			)
 
 
+func _draw_lord_presence_badge(position: Vector2, count: int, scale: float = 1.0, alpha: float = 1.0) -> void:
+	if count <= 0:
+		return
+	var radius := 9.0 * scale
+	var shadow := Color(0.05, 0.025, 0.01, 0.34 * alpha)
+	var fill := Color("#f1d48a")
+	fill.a = alpha
+	var edge := Color("#53351c")
+	edge.a = alpha
+	draw_circle(position + Vector2(1.8 * scale, 2.4 * scale), radius + 1.0 * scale, shadow)
+	draw_circle(position, radius, fill)
+	draw_arc(position, radius, 0.0, TAU, 24, edge, 1.8 * scale, true)
+	if _font:
+		var label := str(count)
+		var font_size := int(round(12.0 * scale))
+		var text_size := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size)
+		var text_position := position - Vector2(text_size.x * 0.5, -text_size.y * 0.32)
+		var text_color := Color("#2b1d12")
+		text_color.a = alpha
+		draw_string(_font, text_position, label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, text_color)
+
+
 func _draw_frame() -> void:
 	draw_rect(MAP_RECT, Color("#5c4328"), false, 10.0)
 	draw_rect(MAP_RECT.grow(-18.0), Color(0.22, 0.13, 0.06, 0.28), false, 2.0)
@@ -828,6 +1123,8 @@ func _draw_frame() -> void:
 
 func _draw_threat_circles() -> void:
 	for lord in _lord_parties:
+		if _is_lord_absorbed(lord):
+			continue
 		if not _is_hostile_lord(lord):
 			continue
 		var pos: Vector2 = lord["pos"]
@@ -1338,6 +1635,93 @@ func _feature_render_priority(feature: Dictionary) -> int:
 	return int(properties.get("render_priority", 0))
 
 
+func _combat_biome_feature_at(position: Vector2) -> Dictionary:
+	var best_feature: Dictionary = {}
+	var best_priority := -999999
+	for raw_feature in _biome_features:
+		if not (raw_feature is Dictionary):
+			continue
+
+		var feature := Dictionary(raw_feature)
+		var priority := _feature_render_priority(feature)
+		if priority < best_priority:
+			continue
+
+		for polygon in _geometry_to_polygons(Dictionary(feature.get("geometry", {}))):
+			if polygon.size() >= 3 and _point_in_polygon(position, polygon):
+				best_feature = feature
+				best_priority = priority
+				break
+	return best_feature
+
+
+func _nearest_combat_biome_feature(position: Vector2) -> Dictionary:
+	var best_feature: Dictionary = {}
+	var best_distance := INF
+	var best_priority := -999999
+	for raw_feature in _biome_features:
+		if not (raw_feature is Dictionary):
+			continue
+
+		var feature := Dictionary(raw_feature)
+		var distance := _distance_to_feature_polygons(position, feature)
+		var priority := _feature_render_priority(feature)
+		if distance < best_distance or (is_equal_approx(distance, best_distance) and priority > best_priority):
+			best_feature = feature
+			best_distance = distance
+			best_priority = priority
+	return best_feature
+
+
+func _distance_to_feature_polygons(position: Vector2, feature: Dictionary) -> float:
+	var best_distance := INF
+	for polygon in _geometry_to_polygons(Dictionary(feature.get("geometry", {}))):
+		if polygon.size() < 3:
+			continue
+		if _point_in_polygon(position, polygon):
+			return 0.0
+		best_distance = minf(best_distance, _distance_to_polygon_edges(position, polygon))
+	return best_distance
+
+
+func _combat_relief_context_at(position: Vector2) -> Dictionary:
+	var best_context: Dictionary = {}
+	var best_rank := -999999
+	for raw_feature in _relief_features:
+		if not (raw_feature is Dictionary):
+			continue
+
+		var feature := Dictionary(raw_feature)
+		var properties := Dictionary(feature.get("properties", {}))
+		var kind := String(properties.get("kind", ""))
+		if kind != "elevation_zone":
+			continue
+
+		for polygon in _geometry_to_polygons(Dictionary(feature.get("geometry", {}))):
+			if polygon.size() < 3 or not _point_in_polygon(position, polygon):
+				continue
+
+			var shade_rank := int(properties.get("shade_rank", 0))
+			if shade_rank >= best_rank:
+				best_rank = shade_rank
+				best_context = {
+					"relief_kind": kind,
+					"relief_name": String(properties.get("name", "")),
+					"relief_shade_rank": shade_rank
+				}
+	return best_context
+
+
+func _fallback_combat_map_context(position: Vector2) -> Dictionary:
+	return {
+		"campaign_position": position,
+		"biome_id": 3,
+		"biome_key": "biome_central_highlands",
+		"biome_name": "Central highlands",
+		"biome_properties": {}
+	}
+
+
 func _clamp_to_playable_rect(position: Vector2) -> Vector2:
 	var playable_rect := get_playable_rect()
 	return Vector2(
@@ -1598,6 +1982,7 @@ func _load_map_dataset() -> void:
 	_chokepoint_features = _load_layer_features(String(layers.get("chokepoints", "")))
 	_build_land_travel_masks()
 	_build_settlement_entries()
+	_build_road_graph()
 
 	_data_loaded = not _land_features.is_empty() and not _settlement_entries.is_empty()
 	if not _data_loaded:
@@ -1705,6 +2090,207 @@ func _load_layer_features(relative_path: String) -> Array:
 		return []
 
 	return Array(layer.get("features", []))
+
+
+func _build_road_graph() -> void:
+	_road_graph_points.clear()
+	_road_graph_edges.clear()
+
+	for line in _road_lines_for_navigation():
+		if line.size() < 2:
+			continue
+		for index in range(line.size() - 1):
+			var from_index := _road_graph_node_index(line[index])
+			var to_index := _road_graph_node_index(line[index + 1])
+			_add_road_graph_edge(from_index, to_index)
+
+	_connect_nearby_road_nodes()
+
+
+func _road_lines_for_navigation() -> Array[PackedVector2Array]:
+	var lines: Array[PackedVector2Array] = []
+	if not _route_features.is_empty():
+		for feature in _route_features:
+			var feature_dict := Dictionary(feature)
+			var geometry := Dictionary(feature_dict.get("geometry", {}))
+			for line in _geometry_to_lines(geometry):
+				if line.size() >= 2:
+					lines.append(line)
+		if not lines.is_empty():
+			return lines
+
+	for road in ROADS:
+		var fallback_line := _scaled_points(PackedVector2Array(road))
+		if fallback_line.size() >= 2:
+			lines.append(fallback_line)
+	return lines
+
+
+func _road_graph_node_index(position: Vector2) -> int:
+	for index in range(_road_graph_points.size()):
+		if Vector2(_road_graph_points[index]).distance_to(position) <= LORD_ROAD_GRAPH_MERGE_DISTANCE:
+			return index
+
+	_road_graph_points.append(position)
+	_road_graph_edges.append([])
+	return _road_graph_points.size() - 1
+
+
+func _add_road_graph_edge(from_index: int, to_index: int) -> void:
+	if from_index == to_index:
+		return
+	if from_index < 0 or to_index < 0:
+		return
+	if from_index >= _road_graph_points.size() or to_index >= _road_graph_points.size():
+		return
+
+	var cost := Vector2(_road_graph_points[from_index]).distance_to(Vector2(_road_graph_points[to_index]))
+	if cost <= 0.01:
+		return
+
+	if not _road_graph_has_edge(from_index, to_index):
+		var from_edges := Array(_road_graph_edges[from_index])
+		from_edges.append({"to": to_index, "cost": cost})
+		_road_graph_edges[from_index] = from_edges
+	if not _road_graph_has_edge(to_index, from_index):
+		var to_edges := Array(_road_graph_edges[to_index])
+		to_edges.append({"to": from_index, "cost": cost})
+		_road_graph_edges[to_index] = to_edges
+
+
+func _road_graph_has_edge(from_index: int, to_index: int) -> bool:
+	if from_index < 0 or from_index >= _road_graph_edges.size():
+		return false
+
+	for raw_edge in Array(_road_graph_edges[from_index]):
+		var edge := Dictionary(raw_edge)
+		if int(edge.get("to", -1)) == to_index:
+			return true
+	return false
+
+
+func _connect_nearby_road_nodes() -> void:
+	for left_index in range(_road_graph_points.size()):
+		for right_index in range(left_index + 1, _road_graph_points.size()):
+			var distance := Vector2(_road_graph_points[left_index]).distance_to(Vector2(_road_graph_points[right_index]))
+			if distance <= LORD_ROAD_GRAPH_CONNECT_DISTANCE:
+				_add_road_graph_edge(left_index, right_index)
+
+
+func _ensure_road_graph() -> void:
+	if not _road_graph_points.is_empty():
+		return
+	_build_road_graph()
+
+
+func _road_graph_waypoint(current_position: Vector2, final_target: Vector2, direct_distance: float) -> Vector2:
+	_ensure_road_graph()
+	if _road_graph_points.size() < 2:
+		return Vector2.INF
+
+	var path := _road_path_between(current_position, final_target)
+	if path.is_empty():
+		return Vector2.INF
+
+	var road_distance := current_position.distance_to(Vector2(path[0]))
+	road_distance += _road_path_distance(path)
+	road_distance += Vector2(path[path.size() - 1]).distance_to(final_target)
+	if road_distance > direct_distance * LORD_ROAD_MAX_DETOUR_MULTIPLIER:
+		return Vector2.INF
+
+	var waypoint := Vector2(path[0])
+	if current_position.distance_to(waypoint) <= LORD_ROAD_REJOIN_RADIUS and path.size() > 1:
+		waypoint = Vector2(path[1])
+	if current_position.distance_to(waypoint) <= 0.01:
+		return Vector2.INF
+	return waypoint
+
+
+func _road_path_between(start_position: Vector2, end_position: Vector2) -> Array:
+	var start_index := _nearest_road_graph_node_index(start_position)
+	var end_index := _nearest_road_graph_node_index(end_position)
+	if start_index < 0 or end_index < 0:
+		return []
+	if start_index == end_index:
+		return [Vector2(_road_graph_points[start_index])]
+
+	var open_nodes: Array = [start_index]
+	var costs: Dictionary = {}
+	var previous: Dictionary = {}
+	costs[start_index] = 0.0
+
+	while not open_nodes.is_empty():
+		var current_index := _pop_lowest_cost_road_node(open_nodes, costs)
+		if current_index == end_index:
+			break
+
+		var current_cost := float(costs.get(current_index, INF))
+		for raw_edge in Array(_road_graph_edges[current_index]):
+			var edge := Dictionary(raw_edge)
+			var next_index := int(edge.get("to", -1))
+			if next_index < 0:
+				continue
+			var next_cost := current_cost + float(edge.get("cost", INF))
+			if next_cost >= float(costs.get(next_index, INF)):
+				continue
+			costs[next_index] = next_cost
+			previous[next_index] = current_index
+			if not open_nodes.has(next_index):
+				open_nodes.append(next_index)
+
+	if not costs.has(end_index):
+		return []
+
+	var path_indices: Array = []
+	var cursor := end_index
+	path_indices.push_front(cursor)
+	while cursor != start_index and previous.has(cursor):
+		cursor = int(previous[cursor])
+		path_indices.push_front(cursor)
+
+	if path_indices.is_empty() or int(path_indices[0]) != start_index:
+		return []
+
+	var path: Array = []
+	for raw_index in path_indices:
+		path.append(Vector2(_road_graph_points[int(raw_index)]))
+	return path
+
+
+func _nearest_road_graph_node_index(position: Vector2) -> int:
+	var best_index := -1
+	var best_distance := INF
+	for index in range(_road_graph_points.size()):
+		var distance := position.distance_to(Vector2(_road_graph_points[index]))
+		if distance < best_distance:
+			best_distance = distance
+			best_index = index
+	return best_index
+
+
+func _pop_lowest_cost_road_node(open_nodes: Array, costs: Dictionary) -> int:
+	var best_open_index := 0
+	var best_node := int(open_nodes[0])
+	var best_cost := float(costs.get(best_node, INF))
+	for open_index in range(1, open_nodes.size()):
+		var node_index := int(open_nodes[open_index])
+		var node_cost := float(costs.get(node_index, INF))
+		if node_cost < best_cost:
+			best_cost = node_cost
+			best_node = node_index
+			best_open_index = open_index
+	open_nodes.remove_at(best_open_index)
+	return best_node
+
+
+func _road_path_distance(path: Array) -> float:
+	if path.size() < 2:
+		return 0.0
+
+	var distance := 0.0
+	for index in range(path.size() - 1):
+		distance += Vector2(path[index]).distance_to(Vector2(path[index + 1]))
+	return distance
 
 
 func _build_land_travel_masks() -> void:
@@ -2231,8 +2817,12 @@ func _rumor_state_priority(state: String) -> float:
 			return 4.0
 		"search":
 			return 3.0
+		"retreat":
+			return 3.4
 		"intercept":
 			return 2.0
+		"muster":
+			return 2.5
 		"patrol":
 			return 1.0
 		_:
@@ -2246,6 +2836,7 @@ func _decay_lord_ai_state(lord: Dictionary, elapsed_minutes: float) -> Dictionar
 	var decay_multiplier := 1.0
 	if state == "recover" or state == "holding":
 		decay_multiplier = 1.35
+	decay_multiplier *= _lord_history_confidence_decay_multiplier(lord)
 	knowledge["confidence"] = maxf(0.0, float(knowledge.get("confidence", 0.0)) - LORD_CONFIDENCE_DECAY_PER_HOUR * hours * decay_multiplier)
 	lord["local_knowledge"] = knowledge
 
@@ -2255,9 +2846,12 @@ func _decay_lord_ai_state(lord: Dictionary, elapsed_minutes: float) -> Dictionar
 		"pursuing":
 			fatigue += 18.0 * hours
 			supplies -= 5.5 * hours
-		"search", "intercept":
+		"search", "intercept", "muster":
 			fatigue += 10.0 * hours
 			supplies -= 3.5 * hours
+		"retreat":
+			fatigue += 14.0 * hours
+			supplies -= 4.5 * hours
 		"patrol":
 			fatigue += 6.0 * hours
 			supplies -= 2.5 * hours
@@ -2276,51 +2870,30 @@ func _decay_lord_ai_state(lord: Dictionary, elapsed_minutes: float) -> Dictionar
 
 
 func _update_lord_perception(lord: Dictionary, player_position: Vector2, player_is_safe: bool, pressure_score: float, notices: Array[String]) -> Dictionary:
-	if not _is_hostile_lord(lord):
-		return lord
-
 	var current_minute := GameState.get_game_total_minutes()
 	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
 	var distance := lord_position.distance_to(player_position)
 	var knowledge := _lord_local_knowledge(lord)
 
-	if player_is_safe:
+	if _is_hostile_lord(lord) and player_is_safe:
 		var last_safe_minute := int(lord.get("last_safe_confidence_minute", -99999))
 		if current_minute - last_safe_minute >= OVERWORLD_AI_PLAN_INTERVAL_MINUTES:
 			lord["last_safe_confidence_minute"] = current_minute
 			knowledge["confidence"] = maxf(0.0, float(knowledge.get("confidence", 0.0)) - LORD_SAFE_PLACE_CONFIDENCE_LOSS)
 			knowledge["source"] = "walls and narrow streets"
 			lord["local_knowledge"] = knowledge
-			if _is_lord_pursuing(lord):
+			if _is_lord_pursuing_player(lord):
 				GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
 				lord["state"] = "search" if float(knowledge.get("confidence", 0.0)) >= LORD_SEARCH_CONFIDENCE_MIN else "recover"
 				lord["next_plan_minute"] = 0
 				_set_director_relief(current_minute + OVERWORLD_AI_RELIEF_AFTER_ESCAPE_MINUTES)
 				notices.append("%s loses your trail among walls, gates, and conflicting witnesses." % String(lord.get("name", "A lord")))
-		return lord
 
-	if distance <= _lord_detection_radius(lord):
-		if _director_allows_hunt(lord, pressure_score, true, distance):
-			var was_pursuing := _is_lord_pursuing(lord)
-			lord = _set_lord_knowledge(lord, player_position, LORD_DIRECT_SIGHT_CONFIDENCE, "direct sighting")
-			lord["task"] = _make_lord_task("pursue", 100.0, "The party has been seen directly.", "", player_position, LORD_DIRECT_SIGHT_CONFIDENCE)
-			lord["state"] = "pursuing"
-			lord["hold_minutes"] = 0.0
-			lord["waiting_at"] = ""
-			lord["next_plan_minute"] = current_minute + randi_range(4, 8)
-			GameState.set_lord_pursuit_state(String(lord.get("name", "")), {
-				"state": "pursuing",
-				"started_minute": current_minute,
-				"confidence": LORD_DIRECT_SIGHT_CONFIDENCE
-			})
-			_mark_direct_sighting(current_minute)
-			if not was_pursuing:
-				GameState.adjust_morale(-2)
-				lord = _remember_lord_event(lord, "sighting", "Saw David's band on the road.", player_position)
-				notices.append("%s has seen your trail and turns toward you." % String(lord.get("name", "A hostile lord")))
-		else:
-			lord = _set_lord_knowledge(lord, player_position, maxf(float(knowledge.get("confidence", 0.0)), LORD_RUMOR_CONFIDENCE), "blocked by pressure")
-			lord["next_plan_minute"] = 0
+	var direct_target := _nearest_direct_war_target(lord, player_position, player_is_safe)
+	if not direct_target.is_empty():
+		return _react_to_direct_war_target(lord, direct_target, pressure_score, notices)
+
+	if not _is_hostile_lord(lord):
 		return lord
 
 	var last_rumor_minute := int(lord.get("last_rumor_minute", -99999))
@@ -2342,10 +2915,161 @@ func _lord_can_hear_rumor(lord: Dictionary, player_position: Vector2) -> bool:
 	return not get_nearest_settlement(player_position, 95.0).is_empty()
 
 
+func _player_war_target(world_position: Vector2, distance: float = 0.0) -> Dictionary:
+	return {
+		"kind": "player",
+		"id": "player",
+		"name": "your band",
+		"faction": "David's Band",
+		"pos": world_position,
+		"distance": maxf(0.0, distance),
+		"strength": _player_campaign_strength()
+	}
+
+
+func _lord_war_target(lord: Dictionary, distance: float, strength: float = -1.0) -> Dictionary:
+	var lord_name := String(lord.get("name", "enemy lord"))
+	return {
+		"kind": "lord",
+		"id": lord_name,
+		"lord_id": lord_name,
+		"name": lord_name,
+		"faction": String(lord.get("faction", "")),
+		"title": String(lord.get("title", "")),
+		"role": String(lord.get("role", "")),
+		"party_size": int(lord.get("party_size", 0)),
+		"is_faction_leader": _is_faction_leader_lord(lord),
+		"pos": Vector2(lord.get("pos", Vector2.ZERO)),
+		"distance": maxf(0.0, distance),
+		"strength": _lord_campaign_strength(lord) if strength < 0.0 else strength
+	}
+
+
+func _nearest_direct_war_target(lord: Dictionary, player_position: Vector2, player_is_safe: bool) -> Dictionary:
+	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+	var detection_radius := _lord_detection_radius(lord)
+	var best_target: Dictionary = {}
+	var best_score := INF
+
+	if _is_hostile_lord(lord) and not player_is_safe:
+		var player_distance := lord_position.distance_to(player_position)
+		if player_distance <= detection_radius:
+			best_target = _player_war_target(player_position, player_distance)
+			best_score = player_distance - 260.0
+
+	for other_lord in _lord_parties:
+		if not (other_lord is Dictionary):
+			continue
+		var enemy_lord := Dictionary(other_lord)
+		var enemy_name := String(enemy_lord.get("name", ""))
+		if enemy_name.is_empty() or enemy_name == String(lord.get("name", "")):
+			continue
+		if GameState.is_lord_defeated(enemy_name):
+			continue
+		if not _lords_are_at_war(lord, enemy_lord):
+			continue
+
+		var enemy_position := Vector2(enemy_lord.get("pos", Vector2.ZERO))
+		var enemy_distance := lord_position.distance_to(enemy_position)
+		if enemy_distance > detection_radius:
+			continue
+		var enemy_is_strategic := _is_faction_leader_lord(enemy_lord)
+		var ordinary_notice_radius := maxf(LORD_WEAK_FLEE_RADIUS, detection_radius * LORD_ORDINARY_TARGET_NOTICE_MULTIPLIER)
+		if not enemy_is_strategic and enemy_distance > ordinary_notice_radius:
+			continue
+		var enemy_strength := _lord_campaign_strength(enemy_lord)
+		var score := enemy_distance - minf(enemy_strength, 160.0) * 0.10
+		if enemy_is_strategic:
+			score -= 120.0
+		else:
+			score += 180.0
+		if score < best_score:
+			best_score = score
+			best_target = _lord_war_target(enemy_lord, enemy_distance, enemy_strength)
+
+	return best_target
+
+
+func _react_to_direct_war_target(lord: Dictionary, target: Dictionary, pressure_score: float, notices: Array[String]) -> Dictionary:
+	var current_minute := GameState.get_game_total_minutes()
+	var target_kind := String(target.get("kind", "lord"))
+	var target_name := String(target.get("name", "enemy force"))
+	var target_position := Vector2(target.get("pos", Vector2.INF))
+	var target_distance := float(target.get("distance", Vector2(lord.get("pos", Vector2.ZERO)).distance_to(target_position)))
+	var target_is_player := target_kind == "player"
+
+	if target_is_player:
+		lord = _set_lord_knowledge(lord, target_position, LORD_DIRECT_SIGHT_CONFIDENCE, "direct sighting")
+
+	if _lord_should_retreat_from_target(lord, target):
+		var was_retreating := String(lord.get("state", "")) == "retreat"
+		lord["task"] = _make_lord_retreat_task(lord, target, 112.0, "%s is too close and this force is too weak to stand." % target_name, LORD_DIRECT_SIGHT_CONFIDENCE)
+		lord["state"] = "retreat"
+		lord["hold_minutes"] = 0.0
+		lord["waiting_at"] = ""
+		lord["next_plan_minute"] = current_minute + randi_range(4, 8)
+		GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
+		if target_is_player and not was_retreating:
+			lord = _remember_lord_event(lord, "retreated_from_player", "Backed away from a stronger band.", target_position)
+			notices.append("%s pulls back instead of facing your stronger band alone." % String(lord.get("name", "A hostile lord")))
+		return lord
+
+	if not _lord_should_engage_war_target(lord, target):
+		if target_is_player:
+			_mark_direct_sighting(current_minute)
+			lord["next_plan_minute"] = current_minute + randi_range(6, 12)
+		return lord
+
+	if _lord_should_muster_before_target(lord, target):
+		var was_pursuing_player := _is_lord_pursuing_player(lord)
+		lord["task"] = _make_lord_muster_task(lord, LORD_DIRECT_SIGHT_CONFIDENCE, "%s has been seen, but this force will not risk a weak solo chase." % target_name, LORD_DIRECT_SIGHT_CONFIDENCE)
+		lord["state"] = "muster"
+		lord["hold_minutes"] = 0.0
+		lord["waiting_at"] = ""
+		lord["next_plan_minute"] = current_minute + randi_range(4, 8)
+		GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
+		if target_is_player:
+			_mark_direct_sighting(current_minute)
+			if not was_pursuing_player:
+				lord = _remember_lord_event(lord, "sighting", "Saw the player band but chose to gather support.", target_position)
+				notices.append("%s sees your trail, but gathers support instead of charging alone." % String(lord.get("name", "A hostile lord")))
+		return lord
+
+	if target_is_player and not _director_allows_hunt(lord, pressure_score, true, target_distance):
+		var knowledge := _lord_local_knowledge(lord)
+		lord = _set_lord_knowledge(lord, target_position, maxf(float(knowledge.get("confidence", 0.0)), LORD_RUMOR_CONFIDENCE), "blocked by pressure")
+		lord["next_plan_minute"] = 0
+		return lord
+
+	if not _lord_should_pursue_war_target(lord, target):
+		return lord
+
+	var was_pursuing_player := _is_lord_pursuing_player(lord)
+	lord["task"] = _make_lord_pursue_target_task(target, 100.0, "%s has been seen directly." % target_name, LORD_DIRECT_SIGHT_CONFIDENCE)
+	lord["state"] = "pursuing"
+	lord["hold_minutes"] = 0.0
+	lord["waiting_at"] = ""
+	lord["next_plan_minute"] = current_minute + randi_range(4, 8)
+	if target_is_player:
+		GameState.set_lord_pursuit_state(String(lord.get("name", "")), {
+			"state": "pursuing",
+			"started_minute": current_minute,
+			"confidence": LORD_DIRECT_SIGHT_CONFIDENCE
+		})
+		_mark_direct_sighting(current_minute)
+		if not was_pursuing_player:
+			GameState.adjust_morale(-2)
+			lord = _remember_lord_event(lord, "sighting", "Saw the player band on the road.", target_position)
+			notices.append("%s has seen your trail and turns toward you." % String(lord.get("name", "A hostile lord")))
+	else:
+		GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
+	return lord
+
+
 func _director_allows_hunt(lord: Dictionary, pressure_score: float, direct_sight: bool, distance: float) -> bool:
 	if not _is_hostile_lord(lord):
 		return false
-	if _is_lord_pursuing(lord):
+	if _is_lord_pursuing_player(lord):
 		return true
 	var current_minute := GameState.get_game_total_minutes()
 	var director := _overworld_ai_director()
@@ -2365,9 +3089,349 @@ func _active_pursuer_count(except_lord_name: String = "") -> int:
 		var lord_name := String(lord.get("name", ""))
 		if lord_name == except_lord_name:
 			continue
-		if String(lord.get("state", "")) == "pursuing" or String(GameState.get_lord_pursuit_state(lord_name).get("state", "")) == "pursuing":
+		if _is_lord_pursuing_player(lord):
 			count += 1
 	return count
+
+
+func _coordination_role_for(lord: Dictionary, active_hunt_elsewhere: bool, pressure_score: float, player_is_safe: bool) -> Dictionary:
+	if not _is_hostile_lord(lord):
+		return {"id": "local", "reason": ""}
+	if _is_lord_pursuing_player(lord):
+		return {
+			"id": "pursuer",
+			"reason": "This lord already owns the hard chase.",
+			"pursue": 8.0,
+			"search": 3.0
+		}
+
+	var role := String(lord.get("role", ""))
+	var faction := String(lord.get("faction", ""))
+	var caution := float(lord.get("caution", 50.0))
+	if active_hunt_elsewhere:
+		if role == "informer":
+			return {
+				"id": "relay",
+				"reason": "With another host chasing, informers spread and price the news.",
+				"stay": 4.0,
+				"search": 14.0,
+				"pursue": -20.0,
+				"intercept": 14.0,
+				"destination": "Nob"
+			}
+		if faction == "Philistine Lords" or caution >= 60.0:
+			return {
+				"id": "blocker",
+				"reason": "With another host chasing, cautious captains block likely roads.",
+				"patrol": 5.0,
+				"search": 6.0,
+				"pursue": -12.0,
+				"intercept": 24.0,
+				"destination": _likely_blocking_destination_name(lord)
+			}
+		return {
+			"id": "sweeper",
+			"reason": "With another host chasing, this party sweeps nearby roads.",
+			"patrol": -4.0,
+			"search": 18.0,
+			"pursue": -8.0,
+			"intercept": 8.0
+		}
+
+	if pressure_score >= 55.0 and not player_is_safe:
+		return {
+			"id": "net",
+			"reason": "Pressure is high enough that hostile parties keep a loose net.",
+			"patrol": 3.0,
+			"search": 8.0,
+			"intercept": 10.0
+		}
+
+	return {"id": "routine", "reason": ""}
+
+
+func _likely_blocking_destination_name(lord: Dictionary) -> String:
+	var faction := String(lord.get("faction", ""))
+	var role := String(lord.get("role", ""))
+	if role == "informer" or faction == "Edomite Retinue":
+		return "Nob"
+	if faction == "Philistine Lords":
+		return "Ziklag"
+	if faction == "House of Saul":
+		if GameState.get_party_men_count() >= GameState.get_objective_target_men():
+			return "Ziklag"
+		return "Bethlehem"
+	return _lord_home_name(lord)
+
+
+func _lord_strength_profile(lord: Dictionary) -> Dictionary:
+	return _lord_strength_profile_against(lord, _player_campaign_strength())
+
+
+func _lord_strength_profile_against(lord: Dictionary, opposing_strength: float) -> Dictionary:
+	var target_strength := maxf(1.0, opposing_strength)
+	var solo_strength := _lord_campaign_strength(lord)
+	var nearby_support := _nearby_hostile_support_strength(lord, LORD_COMBAT_REINFORCE_RADIUS)
+	var potential_support := _nearby_hostile_support_strength(lord, LORD_GROUP_UP_RADIUS)
+	var nearby_support_count := _nearby_supporting_lord_count(lord, LORD_COMBAT_REINFORCE_RADIUS)
+	var potential_support_count := _nearby_supporting_lord_count(lord, LORD_GROUP_UP_RADIUS)
+	var effective_strength := solo_strength + nearby_support
+	var group_strength := solo_strength + potential_support
+	var solo_ratio := solo_strength / target_strength
+	var effective_ratio := effective_strength / target_strength
+	var group_ratio := group_strength / target_strength
+	var can_pursue := solo_ratio >= LORD_CAUTIOUS_SOLO_RATIO or effective_ratio >= LORD_CONFIDENT_GROUP_RATIO
+	return {
+		"player_strength": _player_campaign_strength(),
+		"target_strength": target_strength,
+		"solo_strength": solo_strength,
+		"nearby_support": nearby_support,
+		"potential_support": potential_support,
+		"nearby_support_count": nearby_support_count,
+		"potential_support_count": potential_support_count,
+		"effective_strength": effective_strength,
+		"group_strength": group_strength,
+		"solo_ratio": solo_ratio,
+		"effective_ratio": effective_ratio,
+		"group_ratio": group_ratio,
+		"can_pursue": can_pursue
+	}
+
+
+func _lord_should_muster_before_pursuit(lord: Dictionary) -> bool:
+	if not _is_hostile_lord(lord):
+		return false
+	return _lord_should_muster_before_target(lord, _player_war_target(player_position, Vector2(lord.get("pos", Vector2.ZERO)).distance_to(player_position)))
+
+
+func _lord_should_muster_before_target(lord: Dictionary, target: Dictionary) -> bool:
+	if target.is_empty():
+		return false
+	var target_strength := float(target.get("strength", _player_campaign_strength()))
+	var profile := _lord_strength_profile_against(lord, target_strength)
+	if bool(profile.get("can_pursue", false)):
+		return false
+	if int(profile.get("potential_support_count", 0)) <= 0 or float(profile.get("potential_support", 0.0)) <= 0.0:
+		return false
+	if float(profile.get("group_ratio", 0.0)) <= float(profile.get("solo_ratio", 0.0)) + 0.04:
+		return false
+	if not _lord_target_is_worth_mustering(lord, target, profile):
+		return false
+	return float(profile.get("solo_ratio", 0.0)) < LORD_CAUTIOUS_SOLO_RATIO
+
+
+func _lord_target_is_worth_mustering(lord: Dictionary, target: Dictionary, profile: Dictionary) -> bool:
+	var group_ratio := float(profile.get("group_ratio", 0.0))
+	if _is_strategic_war_target(target):
+		return group_ratio >= LORD_WEAK_SOLO_RATIO
+	var distance_to_target := float(target.get("distance", Vector2(lord.get("pos", Vector2.ZERO)).distance_to(Vector2(target.get("pos", Vector2.ZERO)))))
+	if distance_to_target > LORD_GROUP_UP_RADIUS * 0.72:
+		return false
+	return group_ratio >= LORD_CAUTIOUS_SOLO_RATIO
+
+
+func _lord_should_engage_war_target(lord: Dictionary, target: Dictionary) -> bool:
+	if target.is_empty():
+		return false
+	if _lord_should_muster_before_target(lord, target):
+		return true
+	return _lord_should_pursue_war_target(lord, target)
+
+
+func _lord_should_pursue_war_target(lord: Dictionary, target: Dictionary) -> bool:
+	if target.is_empty():
+		return false
+	var target_strength := float(target.get("strength", _player_campaign_strength()))
+	var profile := _lord_strength_profile_against(lord, target_strength)
+	if not bool(profile.get("can_pursue", false)):
+		return false
+	if _is_strategic_war_target(target):
+		return true
+	var distance_to_target := float(target.get("distance", Vector2(lord.get("pos", Vector2.ZERO)).distance_to(Vector2(target.get("pos", Vector2.ZERO)))))
+	var ordinary_commit_radius := maxf(LORD_COMBAT_REINFORCE_RADIUS, _lord_detection_radius(lord) * LORD_ORDINARY_TARGET_NOTICE_MULTIPLIER)
+	if distance_to_target > ordinary_commit_radius:
+		return false
+	if float(profile.get("solo_ratio", 0.0)) >= LORD_OPPORTUNISTIC_SOLO_RATIO:
+		return true
+	return int(profile.get("nearby_support_count", 0)) > 0 and float(profile.get("effective_ratio", 0.0)) >= LORD_OPPORTUNISTIC_SUPPORTED_RATIO
+
+
+func _lord_should_retreat_from_player(lord: Dictionary, player_position: Vector2, distance_to_player: float) -> bool:
+	return _lord_should_retreat_from_target(lord, _player_war_target(player_position, distance_to_player))
+
+
+func _lord_should_retreat_from_target(lord: Dictionary, target: Dictionary) -> bool:
+	if target.is_empty():
+		return false
+	var distance_to_target := float(target.get("distance", Vector2(lord.get("pos", Vector2.ZERO)).distance_to(Vector2(target.get("pos", Vector2.ZERO)))))
+	if distance_to_target > LORD_WEAK_FLEE_RADIUS:
+		return false
+	var target_strength := float(target.get("strength", _player_campaign_strength()))
+	var profile := _lord_strength_profile_against(lord, target_strength)
+	var solo_ratio := float(profile.get("solo_ratio", 0.0))
+	var effective_ratio := float(profile.get("effective_ratio", solo_ratio))
+	if effective_ratio >= LORD_CAUTIOUS_SOLO_RATIO:
+		return false
+	if solo_ratio < LORD_WEAK_SOLO_RATIO:
+		return true
+	return distance_to_target <= LORD_WEAK_FLEE_RADIUS * 0.58 and effective_ratio < LORD_WEAK_SOLO_RATIO
+
+
+func _player_campaign_strength() -> float:
+	var party_data := GameState.get_party_data()
+	var generic_count := maxi(0, int(party_data.get("generic_soldier_count", 0)))
+	var named_characters := Array(party_data.get("named_characters", []))
+	var morale_factor := lerpf(0.78, 1.15, clampf(float(GameState.morale) / 100.0, 0.0, 1.0))
+	var david_factor := 1.25
+	return maxf(1.0, (float(generic_count) + float(named_characters.size()) * 1.25 + david_factor) * morale_factor)
+
+
+func _lord_campaign_strength(lord: Dictionary) -> float:
+	var party_size := maxf(0.0, float(int(lord.get("party_size", 0))))
+	var morale_factor := lerpf(0.78, 1.08, clampf(float(lord.get("morale", 65.0)) / 100.0, 0.0, 1.0))
+	var supply_factor := lerpf(0.72, 1.03, clampf(float(lord.get("supplies", 100.0)) / 100.0, 0.0, 1.0))
+	var fatigue_factor := lerpf(1.0, 0.62, clampf(float(lord.get("fatigue", 0.0)) / 100.0, 0.0, 1.0))
+	var command_factor := lerpf(0.95, 1.12, clampf(float(int(lord.get("intelligence", 0))) / 50.0, 0.0, 1.0))
+	return maxf(1.0, party_size * morale_factor * supply_factor * fatigue_factor * command_factor)
+
+
+func _nearby_hostile_support_strength(lord: Dictionary, radius: float) -> float:
+	var support := 0.0
+	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+	for other_lord in _lord_parties:
+		if not (other_lord is Dictionary):
+			continue
+		if not _lords_can_support_each_other(lord, Dictionary(other_lord)):
+			continue
+		if GameState.is_lord_defeated(String(other_lord.get("name", ""))):
+			continue
+		if lord_position.distance_to(Vector2(other_lord.get("pos", Vector2.ZERO))) > radius:
+			continue
+		support += _lord_campaign_strength(other_lord)
+	return support
+
+
+func _nearby_supporting_lord_count(lord: Dictionary, radius: float) -> int:
+	var count := 0
+	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+	for other_lord in _lord_parties:
+		if not (other_lord is Dictionary):
+			continue
+		if not _lords_can_support_each_other(lord, Dictionary(other_lord)):
+			continue
+		if GameState.is_lord_defeated(String(other_lord.get("name", ""))):
+			continue
+		if lord_position.distance_to(Vector2(other_lord.get("pos", Vector2.ZERO))) > radius:
+			continue
+		count += 1
+	return count
+
+
+func _best_hostile_group_target(lord: Dictionary) -> Dictionary:
+	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+	var best: Dictionary = {}
+	var best_score := INF
+	for other_lord in _lord_parties:
+		if not (other_lord is Dictionary):
+			continue
+		if not _lords_can_support_each_other(lord, Dictionary(other_lord)):
+			continue
+		if GameState.is_lord_defeated(String(other_lord.get("name", ""))):
+			continue
+		var other_position := Vector2(other_lord.get("pos", Vector2.ZERO))
+		var distance := lord_position.distance_to(other_position)
+		if distance > LORD_GROUP_UP_RADIUS:
+			continue
+		var strength := _lord_campaign_strength(other_lord)
+		var score := distance - strength * 4.0
+		if score < best_score:
+			best_score = score
+			best = {
+				"lord_id": String(other_lord.get("name", "another lord")),
+				"name": String(other_lord.get("name", "another lord")),
+				"pos": other_position,
+				"strength": strength,
+				"distance": distance
+			}
+	if not best.is_empty():
+		return best
+	return {}
+
+
+func _best_lord_retreat_target(lord: Dictionary, threat: Dictionary) -> Dictionary:
+	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+	var threat_position := Vector2(threat.get("pos", lord_position))
+	var current_threat_distance := lord_position.distance_to(threat_position)
+	var best: Dictionary = {}
+	var best_score := INF
+
+	for other_lord in _lord_parties:
+		if not (other_lord is Dictionary):
+			continue
+		if not _lords_can_support_each_other(lord, Dictionary(other_lord)):
+			continue
+		if GameState.is_lord_defeated(String(other_lord.get("name", ""))):
+			continue
+		var other_position := Vector2(other_lord.get("pos", Vector2.ZERO))
+		var distance := lord_position.distance_to(other_position)
+		if distance > LORD_GROUP_UP_RADIUS * 1.35:
+			continue
+		var threat_distance := other_position.distance_to(threat_position)
+		var strength := _lord_campaign_strength(other_lord)
+		var score := distance - strength * 3.5
+		if threat_distance <= current_threat_distance + 90.0:
+			score += 360.0
+		if score < best_score:
+			best_score = score
+			best = {
+				"name": String(other_lord.get("name", "support")),
+				"pos": other_position,
+				"distance": distance
+			}
+
+	var home_position := _lord_home_position(lord)
+	if home_position != Vector2.INF:
+		var home_score := lord_position.distance_to(home_position) + 80.0
+		if home_position.distance_to(threat_position) <= current_threat_distance + 90.0:
+			home_score += 420.0
+		if home_score < best_score:
+			best_score = home_score
+			best = {
+				"name": _lord_home_name(lord),
+				"pos": home_position,
+				"distance": lord_position.distance_to(home_position)
+			}
+
+	var away_direction := lord_position - threat_position
+	if away_direction.length() <= 0.01:
+		away_direction = Vector2.RIGHT.rotated(randf() * TAU)
+	var away_position := constrain_land_position(lord_position + away_direction.normalized() * LORD_FLEE_TARGET_DISTANCE, lord_position)
+	if away_position != Vector2.INF:
+		var away_score := 220.0
+		if away_position.distance_to(threat_position) <= current_threat_distance + 90.0:
+			away_score += 600.0
+		if best.is_empty() or away_score < best_score:
+			best = {
+				"name": "open ground",
+				"pos": away_position,
+				"distance": lord_position.distance_to(away_position)
+			}
+
+	return best
+
+
+func _lords_can_group_for_hunt(lord: Dictionary, other_lord: Dictionary) -> bool:
+	return _lords_can_support_each_other(lord, other_lord)
+
+
+func _lords_can_support_each_other(lord: Dictionary, other_lord: Dictionary) -> bool:
+	var lord_name := String(lord.get("name", ""))
+	var other_name := String(other_lord.get("name", ""))
+	if lord_name.is_empty() or lord_name == other_name:
+		return false
+	var faction := String(lord.get("faction", ""))
+	var other_faction := String(other_lord.get("faction", ""))
+	return _factions_are_allied(faction, other_faction)
 
 
 func _should_replan_lord(lord: Dictionary, current_minute: int) -> bool:
@@ -2384,6 +3448,9 @@ func _plan_lord_task(lord: Dictionary, player_position: Vector2, player_is_safe:
 	var task_type := String(selected_task.get("type", ""))
 	lord["task"] = selected_task
 	lord["state"] = _state_for_lord_task(task_type)
+	if task_type in ["pursue", "search", "intercept", "muster", "retreat", "recover"]:
+		lord["hold_minutes"] = 0.0
+		lord["waiting_at"] = ""
 	lord["next_plan_minute"] = GameState.get_game_total_minutes() + OVERWORLD_AI_PLAN_INTERVAL_MINUTES + randi_range(-4, 6)
 	if task_type != "pursue":
 		GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
@@ -2418,6 +3485,13 @@ func _score_lord_tasks(lord: Dictionary, player_position: Vector2, player_is_saf
 	var ambition := float(lord.get("ambition", 50.0))
 	var loyalty := float(lord.get("loyalty", 50.0))
 	var at_home := _is_lord_near_home(lord)
+	var strategy := _faction_strategy_for(lord, pressure_score)
+	var active_hunt_elsewhere := _active_pursuer_count(String(lord.get("name", ""))) > 0
+	var coordination := _coordination_role_for(lord, active_hunt_elsewhere, pressure_score, player_is_safe)
+	var memory_profile := _lord_memory_profile(lord)
+	var legacy_profile := _lord_legacy_profile(lord)
+	var strength_profile := _lord_strength_profile(lord)
+	var distance_to_player := Vector2(lord.get("pos", Vector2.ZERO)).distance_to(player_position)
 
 	var stay_score := 22.0 + caution * 0.24
 	if standing_order.is_empty():
@@ -2429,6 +3503,10 @@ func _score_lord_tasks(lord: Dictionary, player_position: Vector2, player_is_saf
 	stay_score += fatigue * 0.12 + maxf(0.0, 60.0 - supplies) * 0.28
 	if hostile:
 		stay_score -= float(GameState.heat) * 0.18
+	stay_score += float(strategy.get("stay", 0.0))
+	stay_score += float(coordination.get("stay", 0.0))
+	stay_score += float(memory_profile.get("stay", 0.0))
+	stay_score += float(legacy_profile.get("stay", 0.0))
 	candidates.append(_make_lord_task("stay_home", stay_score, "No urgent order is worth leaving the town for.", _lord_home_name(lord), _lord_home_position(lord), confidence))
 
 	var patrol_score := 24.0 - fatigue * 0.20 - maxf(0.0, 45.0 - supplies) * 0.35
@@ -2436,13 +3514,21 @@ func _score_lord_tasks(lord: Dictionary, player_position: Vector2, player_is_saf
 		patrol_score += 34.0
 	if hostile:
 		patrol_score += float(GameState.heat) * 0.24 + ambition * 0.10
-	candidates.append(_make_lord_task("patrol", patrol_score, "The standing route still matters.", "", Vector2.INF, confidence))
+	patrol_score += float(strategy.get("patrol", 0.0))
+	patrol_score += float(coordination.get("patrol", 0.0))
+	patrol_score += float(memory_profile.get("patrol", 0.0))
+	patrol_score += float(legacy_profile.get("patrol", 0.0))
+	candidates.append(_make_lord_task("patrol", patrol_score, _layered_task_reason(strategy, coordination, memory_profile, legacy_profile, "The standing route still matters."), "", Vector2.INF, confidence))
 
 	var recover_score := fatigue * 0.75 + maxf(0.0, 100.0 - supplies) * 0.65
 	if current_minute < int(lord.get("recovery_until_minute", 0)):
 		recover_score += 90.0
 	if fatigue >= LORD_RECOVER_FATIGUE_THRESHOLD or supplies <= LORD_RESUPPLY_THRESHOLD:
 		recover_score += 28.0
+	recover_score += float(strategy.get("recover", 0.0))
+	recover_score += float(coordination.get("recover", 0.0))
+	recover_score += float(memory_profile.get("recover", 0.0))
+	recover_score += float(legacy_profile.get("recover", 0.0))
 	candidates.append(_make_lord_task("recover", recover_score, "Men, animals, and supplies need rest.", _lord_home_name(lord), _lord_home_position(lord), confidence))
 
 	var knowledge_position := _lord_knowledge_position(lord)
@@ -2451,23 +3537,160 @@ func _score_lord_tasks(lord: Dictionary, player_position: Vector2, player_is_saf
 		search_score = confidence * 0.78 + float(GameState.heat) * 0.25 + ambition * 0.16 - caution * 0.10
 		if player_is_safe:
 			search_score -= 30.0
-	candidates.append(_make_lord_task("search", search_score, "Reports point to a road or town worth searching.", "", knowledge_position, confidence))
+		search_score += float(strategy.get("search", 0.0))
+		if active_hunt_elsewhere:
+			search_score += 8.0
+		search_score += float(coordination.get("search", 0.0))
+		search_score += float(memory_profile.get("search", 0.0))
+		search_score += float(legacy_profile.get("search", 0.0))
+	candidates.append(_make_lord_task("search", search_score, _layered_task_reason(strategy, coordination, memory_profile, legacy_profile, "Reports point to a road or town worth searching."), "", knowledge_position, confidence))
+
+	var retreat_score := -INF
+	if hostile and _lord_should_retreat_from_player(lord, player_position, distance_to_player):
+		retreat_score = 118.0 + caution * 0.35 + maxf(0.0, LORD_WEAK_SOLO_RATIO - float(strength_profile.get("solo_ratio", 0.0))) * 70.0
+		retreat_score += maxf(0.0, LORD_CAUTIOUS_SOLO_RATIO - float(strength_profile.get("effective_ratio", 0.0))) * 44.0
+		retreat_score += maxf(0.0, LORD_WEAK_FLEE_RADIUS - distance_to_player) * 0.08
+	candidates.append(_make_lord_retreat_task(lord, _player_war_target(player_position, distance_to_player), retreat_score, "The nearby enemy force is too strong to face alone.", confidence))
 
 	var pursue_score := -INF
-	if hostile and confidence >= LORD_PURSUIT_CONFIDENCE_MIN and not player_is_safe and _director_allows_hunt(lord, pressure_score, false, Vector2(lord.get("pos", Vector2.ZERO)).distance_to(player_position)):
+	if hostile and bool(strength_profile.get("can_pursue", false)) and confidence >= LORD_PURSUIT_CONFIDENCE_MIN and not player_is_safe and _director_allows_hunt(lord, pressure_score, false, distance_to_player):
 		pursue_score = confidence * 1.10 + boldness * 0.35 + loyalty * 0.16 + float(GameState.heat) * 0.25 - caution * 0.18
-	candidates.append(_make_lord_task("pursue", pursue_score, "The trail is fresh enough to risk a hard chase.", "", knowledge_position, confidence))
+		pursue_score += float(strategy.get("pursue", 0.0))
+		pursue_score += float(coordination.get("pursue", 0.0))
+		pursue_score += float(memory_profile.get("pursue", 0.0))
+		pursue_score += float(legacy_profile.get("pursue", 0.0))
+	candidates.append(_make_lord_task("pursue", pursue_score, _layered_task_reason(strategy, coordination, memory_profile, legacy_profile, "The trail is fresh enough to risk a hard chase."), "", knowledge_position, confidence))
 
 	var intercept_score := -INF
-	var intercept_name := _likely_player_destination_name(lord)
+	var intercept_name := _likely_player_destination_name(lord, strategy, coordination)
 	var intercept_position := _position_for_named_settlement(intercept_name, Vector2.INF)
 	if hostile and GameState.heat >= 20 and intercept_position != Vector2.INF:
 		intercept_score = float(GameState.heat) * 0.62 + ambition * 0.18 + boldness * 0.12 - fatigue * 0.22
 		if confidence >= LORD_PURSUIT_CONFIDENCE_MIN:
 			intercept_score -= 20.0
-	candidates.append(_make_lord_task("intercept", intercept_score, "If David is not visible, cover the place he is likely to need.", intercept_name, intercept_position, confidence))
+		intercept_score += float(strategy.get("intercept", 0.0))
+		if active_hunt_elsewhere:
+			intercept_score += 22.0
+		intercept_score += float(coordination.get("intercept", 0.0))
+		intercept_score += float(memory_profile.get("intercept", 0.0))
+		intercept_score += float(legacy_profile.get("intercept", 0.0))
+	candidates.append(_make_lord_task("intercept", intercept_score, _layered_task_reason(strategy, coordination, memory_profile, legacy_profile, "If the target is not visible, cover the place he is likely to need."), intercept_name, intercept_position, confidence))
+
+	var muster_score := -INF
+	if hostile and _lord_should_muster_before_pursuit(lord) and not player_is_safe:
+		muster_score = confidence * 0.82 + caution * 0.24 + loyalty * 0.18 + float(GameState.heat) * 0.28
+		muster_score += maxf(0.0, LORD_CAUTIOUS_SOLO_RATIO - float(strength_profile.get("solo_ratio", 0.0))) * 58.0
+		if float(strength_profile.get("solo_ratio", 0.0)) < LORD_WEAK_SOLO_RATIO:
+			muster_score += 22.0
+		muster_score += maxf(0.0, float(strength_profile.get("group_ratio", 0.0)) - float(strength_profile.get("solo_ratio", 0.0))) * 16.0
+		if confidence >= LORD_PURSUIT_CONFIDENCE_MIN:
+			muster_score += 16.0
+		if active_hunt_elsewhere:
+			muster_score += 8.0
+	candidates.append(_make_lord_muster_task(lord, muster_score, "This force is too weak to chase alone; gather another lord before pressing the enemy.", confidence))
 
 	return candidates
+
+
+func _faction_strategy_for(lord: Dictionary, pressure_score: float) -> Dictionary:
+	var faction := String(lord.get("faction", ""))
+	var role := String(lord.get("role", ""))
+	var heat := float(GameState.heat)
+	var party_ready_for_ziklag := GameState.get_party_men_count() >= GameState.get_objective_target_men()
+	if faction == "House of Saul":
+		if heat >= 40.0 or pressure_score >= 55.0:
+			return {
+				"id": "tighten_net",
+				"reason": "Saul's men are tightening the road net.",
+				"stay": -16.0,
+				"patrol": 8.0,
+				"search": 15.0,
+				"pursue": 12.0,
+				"intercept": 12.0,
+				"destination": "Bethlehem"
+			}
+		return {
+			"id": "hold_hill_roads",
+			"reason": "Saul's men are holding the hill roads.",
+			"patrol": 8.0,
+			"search": 5.0,
+			"intercept": 4.0,
+			"destination": "Bethlehem"
+		}
+	if faction == "Philistine Lords":
+		if party_ready_for_ziklag or heat >= 30.0:
+			return {
+				"id": "guard_ziklag",
+				"reason": "Philistine captains are guarding the southern refuge roads.",
+				"stay": -6.0,
+				"patrol": 8.0,
+				"search": 6.0,
+				"pursue": -4.0,
+				"intercept": 18.0,
+				"destination": "Ziklag"
+			}
+		return {
+			"id": "secure_lowlands",
+			"reason": "Philistine captains are securing the lowland road.",
+			"stay": 4.0,
+			"patrol": 10.0,
+			"intercept": 8.0,
+			"destination": "Gath"
+		}
+	if faction == "Edomite Retinue" or role == "informer":
+		return {
+			"id": "sell_information",
+			"reason": "Doeg's men are more useful as informers than shock riders.",
+			"stay": 5.0,
+			"patrol": 6.0,
+			"search": 14.0,
+			"pursue": -14.0,
+			"intercept": 8.0,
+			"destination": "Nob"
+		}
+	if faction == "David's Band":
+		return {
+			"id": "guard_davidic_towns",
+			"reason": "Allied captains favor safe towns and known paths.",
+			"stay": 12.0,
+			"patrol": 5.0,
+			"recover": 4.0,
+			"destination": "Ziklag"
+		}
+	return {
+		"id": "local_balance",
+		"reason": "Local powers avoid wasteful marches unless the road forces them.",
+		"stay": 8.0,
+		"patrol": 3.0,
+		"recover": 4.0,
+		"destination": _lord_home_name(lord)
+	}
+
+
+func _strategy_reason(strategy: Dictionary, fallback: String) -> String:
+	var reason := String(strategy.get("reason", ""))
+	if reason.is_empty():
+		return fallback
+	return "%s %s" % [fallback, reason]
+
+
+func _layered_task_reason(strategy: Dictionary, coordination: Dictionary, memory_profile: Dictionary, legacy_profile: Dictionary, fallback: String) -> String:
+	var pieces := PackedStringArray()
+	pieces.append(_strategy_reason(strategy, fallback))
+
+	var coordination_reason := String(coordination.get("reason", ""))
+	if not coordination_reason.is_empty():
+		pieces.append(coordination_reason)
+
+	var memory_text := _memory_reason(memory_profile)
+	if not memory_text.is_empty():
+		pieces.append(memory_text)
+
+	var legacy_text := _legacy_reason(legacy_profile)
+	if not legacy_text.is_empty():
+		pieces.append(legacy_text)
+
+	return " ".join(pieces)
 
 
 func _make_lord_task(task_type: String, priority: float, reason: String, target_name: String = "", target_pos: Vector2 = Vector2.INF, confidence: float = 0.0) -> Dictionary:
@@ -2485,14 +3708,55 @@ func _make_lord_task(task_type: String, priority: float, reason: String, target_
 	return task
 
 
+func _make_lord_muster_task(lord: Dictionary, priority: float, reason: String, confidence: float = 0.0) -> Dictionary:
+	var target := _best_hostile_group_target(lord)
+	if target.is_empty():
+		return _make_lord_task("patrol", minf(priority, 10.0), "No allied support is close enough to muster.", "", Vector2.INF, confidence)
+	var target_name := String(target.get("name", _lord_home_name(lord)))
+	var target_position := Vector2(target.get("pos", _lord_home_position(lord)))
+	if target_position == Vector2.INF:
+		target_position = _lord_home_position(lord)
+	var task := _make_lord_task("muster", priority, reason, target_name, target_position, confidence)
+	task["target_kind"] = "lord"
+	task["target_lord_id"] = String(target.get("lord_id", target_name))
+	return task
+
+
+func _make_lord_retreat_task(lord: Dictionary, threat: Dictionary, priority: float, reason: String, confidence: float = 0.0) -> Dictionary:
+	var target := _best_lord_retreat_target(lord, threat)
+	var target_name := String(target.get("name", _lord_home_name(lord)))
+	var target_position := Vector2(target.get("pos", _lord_home_position(lord)))
+	if target_position == Vector2.INF:
+		target_position = _lord_home_position(lord)
+	var task := _make_lord_task("retreat", priority, reason, target_name, target_position, confidence)
+	task["threat_kind"] = String(threat.get("kind", "lord"))
+	task["threat_name"] = String(threat.get("name", "enemy force"))
+	task["threat_lord_id"] = String(threat.get("lord_id", threat.get("id", "")))
+	task["threat_pos"] = Vector2(threat.get("pos", Vector2.INF))
+	return task
+
+
+func _make_lord_pursue_target_task(target: Dictionary, priority: float, reason: String, confidence: float = 0.0) -> Dictionary:
+	var target_position := Vector2(target.get("pos", Vector2.INF))
+	var task := _make_lord_task("pursue", priority, reason, String(target.get("name", "")), target_position, confidence)
+	task["target_kind"] = String(target.get("kind", "lord"))
+	task["target_lord_id"] = String(target.get("lord_id", target.get("id", "")))
+	task["target_faction"] = String(target.get("faction", ""))
+	return task
+
+
 func _state_for_lord_task(task_type: String) -> String:
 	match task_type:
 		"pursue":
 			return "pursuing"
 		"search":
 			return "search"
+		"retreat":
+			return "retreat"
 		"intercept":
 			return "intercept"
+		"muster":
+			return "muster"
 		"recover":
 			return "recover"
 		"stay_home":
@@ -2508,8 +3772,12 @@ func _execute_lord_task(lord: Dictionary, real_seconds: float, player_position: 
 			return _execute_lord_pursuit(lord, real_seconds, player_position, player_is_safe, notices)
 		"search":
 			return _execute_lord_search(lord, real_seconds, notices)
+		"retreat":
+			return _execute_lord_retreat(lord, real_seconds, player_position)
 		"intercept":
 			return _execute_lord_intercept(lord, real_seconds)
+		"muster":
+			return _execute_lord_muster(lord, real_seconds)
 		"recover":
 			return _execute_lord_recovery(lord, real_seconds)
 		"stay_home":
@@ -2523,34 +3791,48 @@ func _execute_lord_task(lord: Dictionary, real_seconds: float, player_position: 
 
 
 func _execute_lord_pursuit(lord: Dictionary, real_seconds: float, player_position: Vector2, player_is_safe: bool, notices: Array[String]) -> Dictionary:
-	if player_is_safe:
+	var task := _lord_task_data(lord)
+	var target_kind := String(task.get("target_kind", "player"))
+	var pursuing_player := target_kind.is_empty() or target_kind == "player"
+	if pursuing_player and player_is_safe:
 		return _break_lord_pursuit_to_search(lord, notices, "safe walls")
 
 	var knowledge := _lord_local_knowledge(lord)
 	var confidence := float(knowledge.get("confidence", 0.0))
-	if confidence < LORD_PURSUIT_CONFIDENCE_MIN:
+	if pursuing_player and confidence < LORD_PURSUIT_CONFIDENCE_MIN:
 		return _break_lord_pursuit_to_search(lord, notices, "a fading trail")
 
-	var target_position := _task_target_position(_lord_task_data(lord), Vector2(knowledge.get("position", player_position)))
+	var fallback_position := Vector2(knowledge.get("position", player_position)) if pursuing_player else _task_target_position(task, Vector2.INF)
+	var target_position := _live_task_target_position(task, fallback_position)
+	if target_position == Vector2.INF:
+		lord["task"] = _make_lord_task("patrol", 10.0, "The enemy target is gone.")
+		lord["state"] = "patrol"
+		lord["next_plan_minute"] = 0
+		GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
+		return {"lord": _advance_lord_on_route(lord, real_seconds), "forced_encounter": {}}
+
 	lord["state"] = "pursuing"
 	lord["hold_minutes"] = 0.0
 	lord["waiting_at"] = ""
-	GameState.set_lord_pursuit_state(String(lord.get("name", "")), {
-		"state": "pursuing",
-		"started_minute": int(GameState.get_lord_pursuit_state(String(lord.get("name", ""))).get("started_minute", GameState.get_game_total_minutes())),
-		"confidence": confidence
-	})
+	if pursuing_player:
+		GameState.set_lord_pursuit_state(String(lord.get("name", "")), {
+			"state": "pursuing",
+			"started_minute": int(GameState.get_lord_pursuit_state(String(lord.get("name", ""))).get("started_minute", GameState.get_game_total_minutes())),
+			"confidence": confidence
+		})
+	else:
+		GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
 	lord = _move_lord_toward(lord, target_position, real_seconds, LORD_PURSUIT_SPEED_MULTIPLIER)
 
 	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
-	if lord_position.distance_to(player_position) <= LORD_CATCH_RADIUS:
+	if pursuing_player and lord_position.distance_to(player_position) <= LORD_CATCH_RADIUS:
 		var caught := _target_from_lord(lord)
 		caught["forced"] = true
 		caught["dialogue"] = "%s's riders close the last stretch at a hard pace. There is no more room to pretend this is only dust on the road." % String(lord.get("name", "The hostile lord"))
-		lord = _remember_lord_event(lord, "caught_player", "Caught David's band on the road.", player_position)
+		lord = _remember_lord_event(lord, "caught_player", "Caught the player band on the road.", player_position)
 		return {"lord": lord, "forced_encounter": caught}
 
-	if lord_position.distance_to(player_position) > _lord_escape_radius(lord) and confidence < LORD_DIRECT_SIGHT_CONFIDENCE * 0.72:
+	if pursuing_player and lord_position.distance_to(player_position) > _lord_escape_radius(lord) and confidence < LORD_DIRECT_SIGHT_CONFIDENCE * 0.72:
 		return _break_lord_pursuit_to_search(lord, notices, "too much distance")
 	return {"lord": lord, "forced_encounter": {}}
 
@@ -2561,6 +3843,7 @@ func _break_lord_pursuit_to_search(lord: Dictionary, notices: Array[String], rea
 	var confidence := maxf(0.0, float(knowledge.get("confidence", 0.0)) - 12.0)
 	knowledge["confidence"] = confidence
 	lord["local_knowledge"] = knowledge
+	lord = _remember_lord_event(lord, "lost_trail", "Lost the player band's trail: %s." % reason, Vector2(knowledge.get("position", lord.get("pos", Vector2.ZERO))))
 	if confidence >= LORD_SEARCH_CONFIDENCE_MIN:
 		lord["task"] = _make_lord_task("search", confidence, "The chase broke, but the last report still matters.", "", Vector2(knowledge.get("position", Vector2.ZERO)), confidence)
 		lord["state"] = "search"
@@ -2595,6 +3878,7 @@ func _execute_lord_search(lord: Dictionary, real_seconds: float, notices: Array[
 			lord["task"] = _make_lord_task("search", confidence, "The first place was cold; check the next road and gate.", next_name, next_search, confidence)
 		else:
 			var next_task := "recover" if float(lord.get("fatigue", 0.0)) > 45.0 or float(lord.get("supplies", 100.0)) < 55.0 else "patrol"
+			lord = _remember_lord_event(lord, "cold_search", "Searched the last report and found only cold tracks.", target_position)
 			lord["task"] = _make_lord_task(next_task, 24.0, "The report has gone stale.")
 			lord["state"] = _state_for_lord_task(next_task)
 			lord["next_plan_minute"] = 0
@@ -2619,6 +3903,108 @@ func _execute_lord_intercept(lord: Dictionary, real_seconds: float) -> Dictionar
 		lord["task"] = _make_lord_task("patrol", 18.0, "The intercept watch has been posted.")
 		lord["state"] = "patrol"
 	return {"lord": lord, "forced_encounter": {}}
+
+
+func _execute_lord_retreat(lord: Dictionary, real_seconds: float, player_position: Vector2) -> Dictionary:
+	var task := _lord_task_data(lord)
+	var target_position := _task_target_position(task, Vector2.INF)
+	if target_position == Vector2.INF:
+		lord["task"] = _make_lord_task("recover", 35.0, "No clean retreat point is useful; fall back to home.", _lord_home_name(lord), _lord_home_position(lord))
+		lord["state"] = "recover"
+		lord["next_plan_minute"] = 0
+		return {"lord": lord, "forced_encounter": {}}
+
+	lord["state"] = "retreat"
+	lord["hold_minutes"] = 0.0
+	lord["waiting_at"] = ""
+	GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
+	lord = _move_lord_toward(lord, target_position, real_seconds, LORD_FLEE_SPEED_MULTIPLIER)
+
+	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+	var threat_position := _retreat_threat_position(task, player_position)
+	var distance_to_threat := lord_position.distance_to(threat_position) if threat_position != Vector2.INF else LORD_WEAK_FLEE_CLEAR_RADIUS
+	if distance_to_threat >= LORD_WEAK_FLEE_CLEAR_RADIUS:
+		lord["next_plan_minute"] = 0
+		return {"lord": lord, "forced_encounter": {}}
+
+	if lord_position.distance_to(target_position) <= LORD_GROUP_UP_ARRIVAL_RADIUS:
+		var next_task := _make_lord_muster_task(lord, 60.0, "The retreat reached a rally point; gather support before moving again.")
+		lord["task"] = next_task
+		lord["state"] = _state_for_lord_task(String(next_task.get("type", "")))
+		lord["next_plan_minute"] = 0
+	return {"lord": lord, "forced_encounter": {}}
+
+
+func _retreat_threat_position(task: Dictionary, player_position: Vector2) -> Vector2:
+	var threat_kind := String(task.get("threat_kind", ""))
+	if threat_kind == "player":
+		return player_position
+	if threat_kind == "lord":
+		var lord_position := _lord_position_for_name(String(task.get("threat_lord_id", "")))
+		if lord_position != Vector2.INF:
+			return lord_position
+	var raw_position = task.get("threat_pos", Vector2.INF)
+	if raw_position is Vector2:
+		return Vector2(raw_position)
+	return Vector2.INF
+
+
+func _execute_lord_muster(lord: Dictionary, real_seconds: float) -> Dictionary:
+	var task := _lord_task_data(lord)
+	var target_position := _live_task_target_position(task, _task_target_position(task, Vector2.INF))
+	if target_position == Vector2.INF:
+		lord["task"] = _make_lord_task("patrol", 10.0, "No rally point is useful.")
+		lord["state"] = "patrol"
+		return {"lord": _advance_lord_on_route(lord, real_seconds), "forced_encounter": {}}
+	var rally_position := _muster_loiter_position(lord, target_position)
+
+	lord["state"] = "muster"
+	GameState.clear_lord_pursuit_state(String(lord.get("name", "")))
+	var lord_position := Vector2(lord.get("pos", Vector2.ZERO))
+	var at_target := lord_position.distance_to(rally_position) <= LORD_GROUP_UP_ARRIVAL_RADIUS
+	var hold_minutes := float(lord.get("hold_minutes", 0.0))
+	if hold_minutes > 0.0 and at_target:
+		var remaining_hold := maxf(0.0, hold_minutes - real_seconds * GameState.GAME_MINUTES_PER_REAL_SECOND)
+		lord["hold_minutes"] = remaining_hold
+		if remaining_hold <= 0.0:
+			lord["waiting_at"] = ""
+			lord["next_plan_minute"] = 0
+		return {"lord": lord, "forced_encounter": {}}
+	if hold_minutes > 0.0 and not at_target:
+		lord["hold_minutes"] = 0.0
+		lord["waiting_at"] = ""
+
+	lord = _move_lord_toward(lord, rally_position, real_seconds, 0.88)
+	if Vector2(lord.get("pos", Vector2.ZERO)).distance_to(rally_position) <= LORD_GROUP_UP_ARRIVAL_RADIUS:
+		var rally_hold := maxf(float(lord.get("hold_minutes", 0.0)), randf_range(75.0, 210.0))
+		lord["hold_minutes"] = rally_hold
+		lord["waiting_at"] = String(task.get("target_name", "rally point"))
+		lord["next_plan_minute"] = GameState.get_game_total_minutes() + randi_range(4, 8)
+	return {"lord": lord, "forced_encounter": {}}
+
+
+func _muster_loiter_position(lord: Dictionary, target_position: Vector2) -> Vector2:
+	if target_position == Vector2.INF:
+		return Vector2.INF
+	var nearby_settlement := get_nearest_settlement(target_position, LORD_ABSORBED_TOWN_RADIUS)
+	if not nearby_settlement.is_empty():
+		return Vector2(nearby_settlement.get("pos", target_position))
+
+	var angle := _stable_lord_angle(lord)
+	for index in range(8):
+		var candidate := target_position + Vector2.RIGHT.rotated(angle + TAU * float(index) / 8.0) * LORD_MUSTER_LOITER_RADIUS
+		var constrained = constrain_land_position(candidate, target_position)
+		if constrained is Vector2 and Vector2(constrained).distance_to(target_position) >= LORD_MUSTER_LOITER_RADIUS * 0.45:
+			return Vector2(constrained)
+	return target_position
+
+
+func _stable_lord_angle(lord: Dictionary) -> float:
+	var name := String(lord.get("name", "lord"))
+	var value := 0
+	for index in range(name.length()):
+		value = (value * 31 + name.unicode_at(index)) % 360
+	return deg_to_rad(float(value))
 
 
 func _execute_lord_stay_home(lord: Dictionary, real_seconds: float) -> Dictionary:
@@ -2665,7 +4051,8 @@ func _move_lord_toward(lord: Dictionary, target_position: Vector2, real_seconds:
 		return lord
 	var pos := Vector2(lord.get("pos", Vector2.ZERO))
 	var previous_pos := pos
-	var to_target := target_position - pos
+	var move_target := _road_guided_lord_target(lord, pos, target_position)
+	var to_target := move_target - pos
 	if to_target.length() <= 0.01:
 		return lord
 	var step := _lord_campaign_speed(lord) * MAP_SCALE * real_seconds * speed_multiplier
@@ -2676,12 +4063,72 @@ func _move_lord_toward(lord: Dictionary, target_position: Vector2, real_seconds:
 	return lord
 
 
+func _road_guided_lord_target(lord: Dictionary, current_position: Vector2, final_target: Vector2) -> Vector2:
+	var state := String(lord.get("state", ""))
+	if not state in ["pursuing", "search", "retreat", "intercept", "muster", "recover", "holding"]:
+		return final_target
+
+	var direct_distance := current_position.distance_to(final_target)
+	if direct_distance <= LORD_ROAD_GUIDANCE_MIN_DISTANCE:
+		return final_target
+
+	var graph_waypoint := _road_graph_waypoint(current_position, final_target, direct_distance)
+	if graph_waypoint != Vector2.INF:
+		return graph_waypoint
+
+	return _route_guided_lord_target(lord, current_position, final_target, direct_distance)
+
+
+func _route_guided_lord_target(lord: Dictionary, current_position: Vector2, final_target: Vector2, current_distance: float) -> Vector2:
+	var route: Array = lord.get("route", [])
+	if route.size() < 2:
+		return final_target
+
+	var best_waypoint := final_target
+	var best_score := current_distance
+	for raw_waypoint in route:
+		if not (raw_waypoint is Vector2):
+			continue
+		var waypoint := Vector2(raw_waypoint)
+		var distance_from_current := current_position.distance_to(waypoint)
+		if distance_from_current <= 45.0:
+			continue
+		var distance_to_target := waypoint.distance_to(final_target)
+		var score := distance_from_current * 0.35 + distance_to_target
+		if distance_to_target < current_distance * 0.94 and score < best_score:
+			best_score = score
+			best_waypoint = waypoint
+	return best_waypoint
+
+
 func _task_target_position(task: Dictionary, fallback: Vector2) -> Vector2:
 	if task.has("target_pos"):
 		var raw_position = task.get("target_pos", fallback)
 		if raw_position is Vector2:
 			return Vector2(raw_position)
 	return fallback
+
+
+func _live_task_target_position(task: Dictionary, fallback: Vector2) -> Vector2:
+	var target_kind := String(task.get("target_kind", ""))
+	if target_kind == "lord":
+		var lord_id := String(task.get("target_lord_id", ""))
+		var lord_position := _lord_position_for_name(lord_id)
+		if lord_position != Vector2.INF:
+			return lord_position
+	return _task_target_position(task, fallback)
+
+
+func _lord_position_for_name(lord_name: String) -> Vector2:
+	if lord_name.is_empty():
+		return Vector2.INF
+	for lord in _lord_parties:
+		if not (lord is Dictionary):
+			continue
+		var lord_dict := Dictionary(lord)
+		if String(lord_dict.get("name", "")) == lord_name and not GameState.is_lord_defeated(lord_name):
+			return Vector2(lord_dict.get("pos", Vector2.INF))
+	return Vector2.INF
 
 
 func _lord_knowledge_position(lord: Dictionary) -> Vector2:
@@ -2712,7 +4159,154 @@ func _remember_lord_event(lord: Dictionary, kind: String, text: String, position
 		"minute": GameState.get_game_total_minutes()
 	})
 	lord["memory"] = _normalize_lord_memory(memory)
+	if _is_hostile_lord(lord):
+		GameState.record_lord_history_event(String(lord.get("name", "")), kind, {
+			"text": text,
+			"position": position
+		})
 	return lord
+
+
+func _lord_memory_profile(lord: Dictionary) -> Dictionary:
+	var profile := {
+		"label": "normal",
+		"sightings": 0.0,
+		"successes": 0.0,
+		"failures": 0.0,
+		"stay": 0.0,
+		"patrol": 0.0,
+		"search": 0.0,
+		"pursue": 0.0,
+		"intercept": 0.0,
+		"recover": 0.0
+	}
+
+	var current_minute := GameState.get_game_total_minutes()
+	var memory_span := LORD_MEMORY_EFFECT_DAYS * 24.0 * 60.0
+	for raw_entry in _normalize_lord_memory(Array(lord.get("memory", []))):
+		var entry := Dictionary(raw_entry)
+		var kind := String(entry.get("kind", ""))
+		var age_minutes := maxf(0.0, float(current_minute - int(entry.get("minute", current_minute))))
+		var weight := clampf(1.0 - age_minutes / memory_span, 0.15, 1.0)
+		match kind:
+			"sighting":
+				profile["sightings"] = float(profile.get("sightings", 0.0)) + weight
+				profile["search"] = float(profile.get("search", 0.0)) + 3.0 * weight
+				profile["pursue"] = float(profile.get("pursue", 0.0)) + 2.0 * weight
+			"caught_player":
+				profile["successes"] = float(profile.get("successes", 0.0)) + weight
+				profile["search"] = float(profile.get("search", 0.0)) + 4.0 * weight
+				profile["pursue"] = float(profile.get("pursue", 0.0)) + 9.0 * weight
+			"lost_trail", "safe_escape", "cold_search":
+				profile["failures"] = float(profile.get("failures", 0.0)) + weight
+				profile["stay"] = float(profile.get("stay", 0.0)) + 2.0 * weight
+				profile["search"] = float(profile.get("search", 0.0)) + 2.0 * weight
+				profile["pursue"] = float(profile.get("pursue", 0.0)) - 8.0 * weight
+				profile["intercept"] = float(profile.get("intercept", 0.0)) + 7.0 * weight
+				profile["recover"] = float(profile.get("recover", 0.0)) + 2.0 * weight
+
+	var failures := float(profile.get("failures", 0.0))
+	var successes := float(profile.get("successes", 0.0))
+	if failures >= 1.5 and failures > successes:
+		profile["label"] = "cagey"
+		profile["pursue"] = float(profile.get("pursue", 0.0)) - 6.0
+		profile["intercept"] = float(profile.get("intercept", 0.0)) + 8.0
+	elif successes >= 0.75:
+		profile["label"] = "emboldened"
+		profile["pursue"] = float(profile.get("pursue", 0.0)) + 4.0
+	elif float(profile.get("sightings", 0.0)) >= 1.5:
+		profile["label"] = "alert"
+		profile["search"] = float(profile.get("search", 0.0)) + 5.0
+
+	return profile
+
+
+func _memory_reason(memory_profile: Dictionary) -> String:
+	match String(memory_profile.get("label", "normal")):
+		"cagey":
+			return "Past failures make him favor roadblocks over blind pursuit."
+		"emboldened":
+			return "Past success makes him quicker to press the chase."
+		"alert":
+			return "Repeated reports keep his men alert."
+		_:
+			return ""
+
+
+func _lord_legacy_profile(lord: Dictionary) -> Dictionary:
+	var history := GameState.get_lord_history(String(lord.get("name", "")))
+	var rank := String(history.get("rank", "unknown"))
+	var grudge := float(history.get("grudge", 0.0))
+	var respect := float(history.get("respect", 0.0))
+	var fear := float(history.get("fear", 0.0))
+	var confidence := float(history.get("confidence", 0.0))
+	var nemesis_score := float(history.get("nemesis_score", 0.0))
+	var profile := {
+		"label": rank,
+		"nemesis_score": nemesis_score,
+		"grudge": grudge,
+		"respect": respect,
+		"fear": fear,
+		"confidence": confidence,
+		"stay": fear * 0.10 - grudge * 0.04,
+		"patrol": confidence * 0.04,
+		"search": grudge * 0.05 + respect * 0.04 + confidence * 0.04,
+		"pursue": grudge * 0.08 + confidence * 0.08 - fear * 0.12,
+		"intercept": grudge * 0.08 + respect * 0.05 + fear * 0.08,
+		"recover": fear * 0.04,
+		"detection_bonus": clampf(nemesis_score * 0.45 + confidence * 0.35 - fear * 0.15, 0.0, 85.0),
+		"rumor_bonus": clampf(grudge * 0.70 + respect * 0.20, 0.0, 120.0),
+		"confidence_decay_multiplier": clampf(1.0 - confidence * 0.004 + fear * 0.003, 0.70, 1.24)
+	}
+
+	match rank:
+		"nemesis":
+			profile["stay"] = float(profile.get("stay", 0.0)) - 10.0
+			profile["patrol"] = float(profile.get("patrol", 0.0)) - 3.0
+			profile["search"] = float(profile.get("search", 0.0)) + 9.0
+			profile["pursue"] = float(profile.get("pursue", 0.0)) + 10.0
+			profile["intercept"] = float(profile.get("intercept", 0.0)) + 6.0
+			profile["confidence_decay_multiplier"] = minf(float(profile.get("confidence_decay_multiplier", 1.0)), 0.72)
+			profile["detection_bonus"] = float(profile.get("detection_bonus", 0.0)) + 35.0
+			profile["rumor_bonus"] = float(profile.get("rumor_bonus", 0.0)) + 60.0
+		"rival":
+			profile["stay"] = float(profile.get("stay", 0.0)) - 2.0
+			profile["patrol"] = float(profile.get("patrol", 0.0)) + 2.0
+			profile["search"] = float(profile.get("search", 0.0)) + 4.0
+			profile["pursue"] = float(profile.get("pursue", 0.0)) + 2.0
+			profile["intercept"] = float(profile.get("intercept", 0.0)) + 4.0
+			profile["confidence_decay_multiplier"] = minf(float(profile.get("confidence_decay_multiplier", 1.0)), 0.88)
+		"haunted":
+			profile["stay"] = float(profile.get("stay", 0.0)) + 12.0
+			profile["search"] = float(profile.get("search", 0.0)) + 4.0
+			profile["pursue"] = float(profile.get("pursue", 0.0)) - 16.0
+			profile["intercept"] = float(profile.get("intercept", 0.0)) + 10.0
+			profile["recover"] = float(profile.get("recover", 0.0)) + 8.0
+			profile["confidence_decay_multiplier"] = maxf(float(profile.get("confidence_decay_multiplier", 1.0)), 1.12)
+			profile["detection_bonus"] = float(profile.get("detection_bonus", 0.0)) + 15.0
+		"watchful":
+			profile["patrol"] = float(profile.get("patrol", 0.0)) + 1.0
+			profile["search"] = float(profile.get("search", 0.0)) + 1.0
+
+	return profile
+
+
+func _legacy_reason(legacy_profile: Dictionary) -> String:
+	match String(legacy_profile.get("label", "unknown")):
+		"nemesis":
+			return "Old hatred makes this personal."
+		"rival":
+			return "Past encounters make him read the player band's road more closely."
+		"haunted":
+			return "Past defeats make him cautious, but not blind."
+		"watchful":
+			return "He remembers enough to stay alert."
+		_:
+			return ""
+
+
+func _lord_history_confidence_decay_multiplier(lord: Dictionary) -> float:
+	return float(_lord_legacy_profile(lord).get("confidence_decay_multiplier", 1.0))
 
 
 func _next_search_position(lord: Dictionary, search_center: Vector2) -> Vector2:
@@ -2734,7 +4328,13 @@ func _next_search_position(lord: Dictionary, search_center: Vector2) -> Vector2:
 	return constrain_land_position(search_center + Vector2(randf_range(-LORD_SEARCH_RADIUS, LORD_SEARCH_RADIUS), randf_range(-LORD_SEARCH_RADIUS, LORD_SEARCH_RADIUS)), search_center)
 
 
-func _likely_player_destination_name(lord: Dictionary) -> String:
+func _likely_player_destination_name(lord: Dictionary, strategy: Dictionary = {}, coordination: Dictionary = {}) -> String:
+	var coordination_destination := String(coordination.get("destination", ""))
+	if not coordination_destination.is_empty():
+		return coordination_destination
+	var strategy_destination := String(strategy.get("destination", ""))
+	if not strategy_destination.is_empty():
+		return strategy_destination
 	var faction := String(lord.get("faction", ""))
 	if GameState.get_party_men_count() >= GameState.get_objective_target_men():
 		return "Ziklag"
@@ -2766,6 +4366,7 @@ func _lord_detection_radius(lord: Dictionary) -> float:
 		radius += 70.0
 	if String(lord.get("state", "")) in ["pursuing", "search"]:
 		radius += 75.0
+	radius += float(_lord_legacy_profile(lord).get("detection_bonus", 0.0))
 	return clampf(radius, 280.0, 700.0)
 
 
@@ -2775,6 +4376,7 @@ func _lord_rumor_radius(lord: Dictionary) -> float:
 		radius += 180.0
 	if String(lord.get("faction", "")) == "House of Saul":
 		radius += 100.0
+	radius += float(_lord_legacy_profile(lord).get("rumor_bonus", 0.0))
 	return radius
 
 
@@ -2793,7 +4395,8 @@ func _calculate_overworld_pressure(world_position: Vector2) -> float:
 		score += _lord_knowledge_confidence(lord) * 0.22
 		match String(lord.get("state", "")):
 			"pursuing":
-				score += 22.0
+				if _lord_task_targets_player(lord):
+					score += 22.0
 			"search":
 				score += 10.0
 			"intercept":
@@ -2908,9 +4511,98 @@ func _is_lord_pursuing(lord: Dictionary) -> bool:
 	return String(lord.get("state", "")) == "pursuing" or String(GameState.get_lord_pursuit_state(name).get("state", "")) == "pursuing"
 
 
+func _is_lord_pursuing_player(lord: Dictionary) -> bool:
+	var name := String(lord.get("name", ""))
+	return String(GameState.get_lord_pursuit_state(name).get("state", "")) == "pursuing" or (String(lord.get("state", "")) == "pursuing" and _lord_task_targets_player(lord))
+
+
+func _lord_task_targets_player(lord: Dictionary) -> bool:
+	var task := _lord_task_data(lord)
+	if String(task.get("type", "")) != "pursue":
+		return false
+	var target_kind := String(task.get("target_kind", "player"))
+	return target_kind.is_empty() or target_kind == "player"
+
+
 func _is_hostile_lord(lord: Dictionary) -> bool:
 	var faction := String(lord.get("faction", ""))
 	return faction == "House of Saul" or faction == "Philistine Lords" or faction == "Edomite Retinue"
+
+
+func _is_player_friendly_lord(lord: Dictionary) -> bool:
+	var faction := String(lord.get("faction", ""))
+	var role := String(lord.get("role", ""))
+	return faction == "David's Band" or faction == "Judah" or role == "ally"
+
+
+func _is_strategic_war_target(target: Dictionary) -> bool:
+	if String(target.get("kind", "")) == "player":
+		return true
+	if bool(target.get("is_faction_leader", false)):
+		return true
+	var role := String(target.get("role", ""))
+	var title := String(target.get("title", "")).to_lower()
+	if role in ["king", "faction_leader", "marshal", "border_lord"]:
+		return true
+	return title.contains("king") or title.contains("commander") or title.contains("seren")
+
+
+func _is_faction_leader_lord(lord: Dictionary) -> bool:
+	var role := String(lord.get("role", ""))
+	var title := String(lord.get("title", "")).to_lower()
+	if String(lord.get("name", "")) == ABNER_NAME:
+		return true
+	if role in ["king", "faction_leader", "marshal", "border_lord"]:
+		return true
+	return title.contains("king") or title.contains("commander") or title.contains("seren")
+
+
+func _factions_are_allied(faction: String, other_faction: String) -> bool:
+	if faction.is_empty() or other_faction.is_empty():
+		return false
+	if faction == other_faction:
+		return true
+	if (faction == "House of Saul" and other_faction == "Edomite Retinue") or (faction == "Edomite Retinue" and other_faction == "House of Saul"):
+		return true
+	if (faction == "David's Band" and other_faction == "Judah") or (faction == "Judah" and other_faction == "David's Band"):
+		return true
+	return false
+
+
+func _factions_are_at_war(faction: String, other_faction: String) -> bool:
+	if faction.is_empty() or other_faction.is_empty() or _factions_are_allied(faction, other_faction):
+		return false
+	if faction == "Jebus" or other_faction == "Jebus":
+		return false
+	var davidic := ["David's Band", "Judah"]
+	var saulide := ["House of Saul", "Edomite Retinue"]
+	if faction in davidic and other_faction in saulide:
+		return true
+	if faction in saulide and other_faction in davidic:
+		return true
+	if faction == "Philistine Lords" and (other_faction in davidic or other_faction in saulide):
+		return true
+	if other_faction == "Philistine Lords" and (faction in davidic or faction in saulide):
+		return true
+	return false
+
+
+func _lords_are_at_war(lord: Dictionary, other_lord: Dictionary) -> bool:
+	if int(lord.get("party_size", 0)) <= 0 or int(other_lord.get("party_size", 0)) <= 0:
+		return false
+	return _factions_are_at_war(String(lord.get("faction", "")), String(other_lord.get("faction", "")))
+
+
+func _lord_can_join_common_enemy_fight(lord: Dictionary, target_lord: Dictionary) -> bool:
+	if not _is_player_friendly_lord(lord) or not _is_hostile_lord(target_lord):
+		return false
+	if int(lord.get("party_size", 0)) <= 0:
+		return false
+	if float(lord.get("supplies", 100.0)) <= 6.0:
+		return false
+	if String(lord.get("state", "")) == "recover" and float(lord.get("fatigue", 0.0)) >= 92.0:
+		return false
+	return true
 
 
 func _abner_detection_radius() -> float:

@@ -20,13 +20,13 @@
     {
       "type": "Feature",
       "id": "sea_of_galilee",
-      "properties": {"name": "Sea of Galilee / Kinneret", "kind": "lake", "water_access": 5, "confidence": "high", "show_label": true},
+      "properties": {"name": "Sea of Kinneret", "kind": "lake", "water_access": 5, "confidence": "high", "show_label": true, "label_coordinates": [35.58, 32.82]},
       "geometry": {"type": "Polygon", "coordinates": [[[35.55, 32.93], [35.62, 32.89], [35.65, 32.82], [35.63, 32.73], [35.57, 32.70], [35.52, 32.75], [35.51, 32.84], [35.55, 32.93]]]}
     },
     {
       "type": "Feature",
       "id": "dead_sea",
-      "properties": {"name": "Dead Sea", "kind": "salt_lake", "water_access": 1, "confidence": "high", "show_label": true, "notes": "Saltwater basin; low potable value but major obstacle and landmark."},
+      "properties": {"name": "Salt Sea", "kind": "salt_lake", "water_access": 1, "confidence": "high", "show_label": true, "label_coordinates": [35.45, 31.37], "notes": "Saltwater basin; low potable value but major obstacle and landmark."},
       "geometry": {"type": "Polygon", "coordinates": [[[35.47, 31.76], [35.55, 31.63], [35.56, 31.27], [35.50, 30.92], [35.43, 30.91], [35.37, 31.15], [35.36, 31.48], [35.40, 31.68], [35.47, 31.76]]]}
     },
     {
@@ -38,7 +38,7 @@
     {
       "type": "Feature",
       "id": "jordan_river",
-      "properties": {"name": "Jordan River", "kind": "river", "water_access": 4, "confidence": "high", "show_label": true, "label_coordinates": [35.51, 32.20]},
+      "properties": {"name": "Yarden", "kind": "river", "water_access": 4, "confidence": "high", "show_label": true, "label_coordinates": [35.50, 32.30]},
       "geometry": {"type": "LineString", "coordinates": [[35.65, 33.25], [35.60, 33.05], [35.57, 32.93], [35.58, 32.70], [35.54, 32.45], [35.50, 32.16], [35.48, 31.95], [35.45, 31.76]]}
     },
     {

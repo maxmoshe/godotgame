@@ -1,10 +1,12 @@
 extends CharacterBody3D
 
 signal died(faction: String)
+signal left_battlefield(faction: String)
 
 const HumanProjectile := preload("res://scripts/human_projectile.gd")
 const ImpactSparks := preload("res://scripts/impact_sparks.gd")
 const DamageNumber := preload("res://scripts/damage_number.gd")
+const QuaterniusSoldierVisualScene := preload("res://scenes/actors/quaternius_soldier_visual.tscn")
 
 const WEAPON_SWORD := "sword"
 const WEAPON_SPEAR := "spear"
@@ -15,6 +17,8 @@ const FACTION_FRIENDLY := "friendly"
 const ORDER_CHARGE := "charge"
 const ORDER_HOLD := "hold"
 const SOLDIER_GROUP := "combat_soldiers"
+const WORLD_COLLISION_MASK := 1
+const SOLDIER_COLLISION_LAYER := 2
 
 const GRAVITY := 22.0
 const GROUND_STICK_VELOCITY := -0.25
@@ -42,6 +46,70 @@ const BOW_TARGET_REFRESH_MIN_SECONDS := 0.30
 const BOW_TARGET_REFRESH_MAX_SECONDS := 0.48
 const HOLD_POSITION_ARRIVAL_DISTANCE := 0.55
 const HOLD_DEFEND_RADIUS := 8.0
+const BATTLE_SLOT_ARRIVAL_DISTANCE := 0.85
+const BATTLE_SLOT_RELEASE_DISTANCE := 10.5
+const BATTLE_SLOT_ARCHER_RELEASE_DISTANCE := 28.0
+const ALLY_SEPARATION_RADIUS := 0.92
+const ALLY_SEPARATION_STRENGTH := 0.55
+const ALLY_SEPARATION_IDLE_MOVE_MULTIPLIER := 0.18
+const ALLY_SEPARATION_MAX_NEIGHBORS := 8
+const BOW_LANE_STEP_DISTANCE := 2.2
+const BOW_LANE_MOVE_MULTIPLIER := 0.72
+const BOW_LANE_MIN_RISK_IMPROVEMENT := 0.10
+const BOW_LANE_COMMIT_SECONDS := 0.55
+const BOW_RISK_REFRESH_SECONDS := 0.18
+const LARGE_BATTLE_BOW_RISK_REFRESH_SECONDS := 0.34
+const BOW_PANIC_DISTANCE := 3.2
+const BOW_KITE_DISTANCE := 8.0
+const BOW_REGROUP_DISTANCE := 7.0
+const BOW_TERRAIN_SCORE_MAX_SOLDIERS := 96
+const BOW_POSITION_RISK_PENALTY := 1200.0
+const BOW_POSITION_RANGE_WEIGHT := 2.4
+const BOW_POSITION_SLOT_WEIGHT := 0.35
+const BOW_POSITION_HEIGHT_WEIGHT := 4.5
+const BOW_POSITION_SLOPE_PENALTY := 14.0
+const FLAT_ACCELERATION_MULTIPLIER := 10.0
+const FLAT_BRAKE_MULTIPLIER := 8.0
+const BACKPEDAL_SPEED_DIVISOR := 2.0
+const STRAFE_SPEED_DIVISOR := 1.3
+const MELEE_BACK_UP_DISTANCE := 1.05
+const MELEE_ADVANCE_DISTANCE := 1.65
+const BOW_BACK_UP_DISTANCE := 17.0
+const BOW_ADVANCE_DISTANCE := 28.0
+const BATTLE_SLOT_SOFT_RELEASE_DISTANCE := 2.2
+const BATTLE_SLOT_MAX_STAGING_SECONDS := 2.8
+const FATIGUE_MAX := 100.0
+const FATIGUE_MOVE_GAIN_PER_SECOND := 1.35
+const FATIGUE_ATTACK_GAIN_PER_SECOND := 5.2
+const FATIGUE_BOW_DRAW_GAIN_PER_SECOND := 3.1
+const FATIGUE_ROUT_GAIN_PER_SECOND := 3.0
+const FATIGUE_RECOVERY_PER_SECOND := 4.4
+const FATIGUE_SPEED_PENALTY := 0.24
+const FATIGUE_ATTACK_COOLDOWN_PENALTY := 0.35
+const FATIGUE_AIM_SPREAD_DEGREES := 2.6
+const MORALE_MAX := 100.0
+const BASE_MORALE := 70.0
+const MORALE_POWER_BONUS := 0.42
+const MORALE_CHECK_INTERVAL := 0.35
+const MORALE_RECOVERY_PER_SECOND := 2.7
+const MORALE_PRESSURE_LOSS_PER_SECOND := 4.6
+const MORALE_WOUND_LOSS := 34.0
+const MORALE_FATIGUE_LOSS := 14.0
+const MORALE_NEARBY_RADIUS := 8.0
+const MORALE_ALLY_SUPPORT := 2.4
+const MORALE_ENEMY_PRESSURE := 2.8
+const MORALE_OUTNUMBERED_LOSS := 4.5
+const MORALE_DAMAGE_LOSS_PER_DAMAGE := 0.38
+const MORALE_DEATH_EVENT_RADIUS := 11.0
+const ALLY_DEATH_MORALE_LOSS := 11.0
+const ENEMY_DEATH_MORALE_GAIN := 5.0
+const MORALE_SHAKEN_THRESHOLD := 45.0
+const MORALE_WAVERING_THRESHOLD := 30.0
+const MORALE_ROUT_THRESHOLD := 16.0
+const MORALE_RALLY_THRESHOLD := 40.0
+const MORALE_ROUT_MIN_SECONDS := 4.2
+const MORALE_ROUT_SPEED_MULTIPLIER := 1.18
+const MORALE_ROUT_SEARCH_RADIUS := 16.0
 const ATTACK_SECONDS := 0.56
 const ATTACK_STRIKE_TIME := 0.24
 const MELEE_KNOCKBACK := 2.7
@@ -49,12 +117,48 @@ const MELEE_HIT_HEIGHT := 1.05
 const MELEE_DAMAGE_FULL_RED := 18.0
 const MELEE_SPARK_CHANCE := 0.35
 const MELEE_DAMAGE_NUMBER_CHANCE := 0.55
+const LARGE_BATTLE_MELEE_FEEDBACK_MULTIPLIER := 0.25
 const HEADSHOT_MULTIPLIER := 3
 const HEAD_CENTER := Vector3(0.0, 1.62, 0.0)
 const HEAD_RADIUS := Vector3(0.42, 0.38, 0.42)
 const HEADSHOT_MIN_Y := 1.30
 const HEADSHOT_FLAT_RADIUS := 0.54
+const BODY_HIT_STAGGER_SECONDS := 0.50
+const HEADSHOT_STAGGER_SECONDS := 0.90
+const BODY_HIT_FLASH_SECONDS := 0.22
+const HEADSHOT_HIT_FLASH_SECONDS := 0.38
 const DETAIL_MESH_GROUP := "soldier_detail_mesh"
+const AI_ACTION_IDLE := "Idle"
+const AI_ACTION_ADVANCE := "Advance"
+const AI_ACTION_ENGAGE := "Engage"
+const AI_ACTION_HOLD := "Hold"
+const AI_ACTION_DRAW := "Draw"
+const AI_ACTION_STRIKE := "Strike"
+const AI_ACTION_FIRE := "Fire"
+const AI_ACTION_LANE := "Find lane"
+const AI_ACTION_KITE := "Kite"
+const AI_ACTION_REGROUP := "Regroup"
+const AI_ACTION_PANIC := "Panic"
+const AI_ACTION_ROUT := "Rout"
+const MORALE_STEADY := "Steady"
+const MORALE_SHAKEN := "Shaken"
+const MORALE_WAVERING := "Wavering"
+const MORALE_ROUTING := "Routing"
+const LARGE_BATTLE_SOLDIER_COUNT := 96
+const LARGE_BATTLE_TARGET_REFRESH_MULTIPLIER := 1.65
+const LARGE_BATTLE_MORALE_CHECK_MULTIPLIER := 1.5
+const LABEL_VISIBLE_MAX_SOLDIERS := 72
+const LABEL_UPDATE_SECONDS := 0.22
+const LARGE_BATTLE_VISUAL_UPDATE_SECONDS := 0.066
+const SMALL_BATTLE_SEPARATION_REFRESH_SECONDS := 0.06
+const LARGE_BATTLE_SEPARATION_REFRESH_SECONDS := 0.16
+const AIM_CONFIDENCE_REQUIRED := 0.72
+const AIM_CONFIDENCE_GAIN_PER_SECOND := 0.72
+const AIM_CONFIDENCE_MOVE_LOSS_PER_SECOND := 0.55
+const AIM_CONFIDENCE_UNSAFE_LOSS_PER_SECOND := 0.95
+const AIM_CONFIDENCE_THREAT_LOSS_PER_SECOND := 1.15
+const AIM_CONFIDENCE_DAMAGE_LOSS := 0.35
+const AIM_CONFIDENCE_SHOT_COST := 0.55
 
 @export var move_speed := 3.4
 @export var aggro_range := 34.0
@@ -65,6 +169,7 @@ const DETAIL_MESH_GROUP := "soldier_detail_mesh"
 @export var power := 5
 @export var speed := 5
 @export var dexterity := 3
+@export var use_imported_visuals := true
 
 var player_target: Node3D
 var terrain_owner: Node
@@ -79,6 +184,18 @@ var _order_mode := ORDER_CHARGE
 var _order_position := Vector3.ZERO
 var _formation_index := 0
 var _has_order_position := false
+var _battle_slot_position := Vector3.ZERO
+var _battle_slot_index := 0
+var _has_battle_slot := false
+var _battle_slot_released := false
+var _battle_slot_stage_time := 0.0
+var _ai_action := AI_ACTION_IDLE
+var _fatigue := 0.0
+var _morale := BASE_MORALE
+var _morale_state := MORALE_STEADY
+var _morale_check_time := 0.0
+var _rout_time := 0.0
+var _rout_direction := Vector3.ZERO
 var _flash_time := 0.0
 var _animation_time := 0.0
 var _label: Label3D
@@ -98,10 +215,31 @@ var _bow_pivot: Node3D
 var _bow_string_top: MeshInstance3D
 var _bow_string_bottom: MeshInstance3D
 var _loaded_arrow_mesh: MeshInstance3D
+var _imported_visual: Node3D
 var _animated_meshes: Array[Node3D] = []
 var _base_positions: Array[Vector3] = []
 var _base_rotations: Array[Vector3] = []
 var _base_scales: Array[Vector3] = []
+var _registered_with_combat := false
+var _flash_visible := false
+var _label_update_time := 0.0
+var _last_label_text := ""
+var _visual_update_time := 0.0
+var _cached_separation_direction := Vector3.ZERO
+var _separation_refresh_time := 0.0
+var _aim_confidence := 0.0
+var _bow_lane_direction := Vector3.ZERO
+var _bow_lane_commit_time := 0.0
+var _bow_risk_refresh_time := 0.0
+var _cached_bow_risk := 0.0
+var _cached_bow_risk_target: Node3D
+var _left_battlefield := false
+var _uses_imported_visuals := false
+
+static var _capsule_mesh_cache := {}
+static var _sphere_mesh: SphereMesh
+static var _box_mesh_cache := {}
+static var _material_cache := {}
 
 
 func setup(new_target: Node3D, new_terrain_owner: Node, new_weapon_type := WEAPON_SWORD, new_has_shield := false, new_faction := FACTION_ENEMY, new_power := 5, new_speed := 5, new_dexterity := 3) -> void:
@@ -117,10 +255,20 @@ func setup(new_target: Node3D, new_terrain_owner: Node, new_weapon_type := WEAPO
 
 func _ready() -> void:
 	health = max_health
+	collision_layer = SOLDIER_COLLISION_LAYER
+	collision_mask = WORLD_COLLISION_MASK
+	max_slides = 2
+	safe_margin = 0.035
 	add_to_group(SOLDIER_GROUP)
 	add_to_group(_faction_group(faction))
+	_register_with_combat()
 	_target_refresh_time = randf_range(0.0, _target_refresh_interval())
 	_apply_stats()
+	_morale = _base_morale()
+	_morale_check_time = randf_range(0.0, _morale_check_interval())
+	_label_update_time = randf_range(0.0, LABEL_UPDATE_SECONDS)
+	_visual_update_time = randf_range(0.0, LARGE_BATTLE_VISUAL_UPDATE_SECONDS)
+	_separation_refresh_time = randf_range(0.0, _separation_refresh_seconds())
 	_base_material = _make_material(Color("#9b6b45"), 0.88)
 	_hit_material = _make_material(Color("#8d251f"), 0.72)
 	_metal_material = _make_material(Color("#aeb7b5"), 0.35)
@@ -129,15 +277,21 @@ func _ready() -> void:
 	_build_body()
 	_build_equipment()
 	_add_health_label()
-	_update_health_label()
+	_update_health_label(0.0, true)
+
+
+func _exit_tree() -> void:
+	_unregister_from_combat()
 
 
 func _physics_process(delta: float) -> void:
-	if health <= 0:
+	if health <= 0 or _left_battlefield:
 		return
 
 	_attack_cooldown = maxf(0.0, _attack_cooldown - delta)
 	_flash_time = maxf(0.0, _flash_time - delta)
+	_bow_lane_commit_time = maxf(0.0, _bow_lane_commit_time - delta)
+	_bow_risk_refresh_time = maxf(0.0, _bow_risk_refresh_time - delta)
 	_update_hit_flash()
 
 	if not is_on_floor():
@@ -146,51 +300,105 @@ func _physics_process(delta: float) -> void:
 		velocity.y = GROUND_STICK_VELOCITY
 
 	var flat_speed := 0.0
-	_update_active_target(delta)
-	if _active_target != null:
-		flat_speed = _think_and_move(delta, _active_target)
-	elif _should_hold_position():
-		flat_speed = _move_to_order_position(delta)
+	_ai_action = AI_ACTION_IDLE
+	_update_morale(delta)
+	if _is_routing():
+		flat_speed = _move_routing(delta)
 	else:
-		velocity.x = move_toward(velocity.x, 0.0, move_speed * delta)
-		velocity.z = move_toward(velocity.z, 0.0, move_speed * delta)
+		_update_active_target(delta)
+		if _active_target != null:
+			flat_speed = _think_and_move(delta, _active_target)
+		elif _should_hold_position():
+			flat_speed = _move_to_order_position(delta)
+		elif _has_battle_slot and not _battle_slot_released:
+			flat_speed = _move_to_battle_slot(delta)
+		else:
+			flat_speed = _settle_or_separate(delta)
 
 	move_and_slide()
-	_animate_soldier(delta, flat_speed)
-	_update_health_label()
+	_update_fatigue(delta, flat_speed)
+	_update_soldier_visuals(delta, flat_speed)
+	_update_health_label(delta)
 
 
 func take_hit(damage: int) -> void:
-	_apply_damage(damage)
+	_apply_damage(damage, false)
 
 
 func take_damage(damage: int, source_position := Vector3.ZERO) -> void:
-	_apply_damage(damage)
+	_apply_damage(damage, false)
 	_apply_melee_knockback(source_position)
 
 
 func take_projectile_hit(damage: int, hit_position: Vector3) -> int:
 	var final_damage := damage
-	if _is_headshot(hit_position):
+	var was_headshot := is_projectile_headshot(hit_position)
+	if was_headshot:
 		final_damage *= HEADSHOT_MULTIPLIER
-	_apply_damage(final_damage)
+	_apply_damage(final_damage, was_headshot)
 	return final_damage
 
 
 func take_projectile_hit_shape(damage: int, hit_position: Vector3, hit_shape_name: String) -> int:
 	var final_damage := damage
-	if hit_shape_name == "HeadHitShape" or _is_headshot(hit_position):
+	var was_headshot := is_projectile_headshot(hit_position, hit_shape_name)
+	if was_headshot:
 		final_damage *= HEADSHOT_MULTIPLIER
-	_apply_damage(final_damage)
+	_apply_damage(final_damage, was_headshot)
 	return final_damage
+
+
+func is_projectile_headshot(hit_position: Vector3, hit_shape_name := "") -> bool:
+	return hit_shape_name == "HeadHitShape" or _is_headshot(hit_position)
 
 
 func get_faction() -> String:
 	return faction
 
 
+func get_weapon_type() -> String:
+	return weapon_type
+
+
 func is_alive() -> bool:
 	return health > 0
+
+
+func is_fleeing() -> bool:
+	return _is_routing()
+
+
+func leave_battlefield() -> void:
+	if _left_battlefield or health <= 0:
+		return
+
+	_left_battlefield = true
+	_unregister_from_combat()
+	_active_target = null
+	left_battlefield.emit(faction)
+	remove_from_group(SOLDIER_GROUP)
+	remove_from_group(_faction_group(faction))
+	velocity = Vector3.ZERO
+	collision_layer = 0
+	collision_mask = 0
+	if _label != null:
+		_label.visible = false
+	queue_free()
+
+
+func receive_morale_event(dead_faction: String, death_position: Vector3) -> void:
+	if health <= 0:
+		return
+
+	var distance := global_position.distance_to(death_position)
+	if distance > MORALE_DEATH_EVENT_RADIUS:
+		return
+
+	var weight := 1.0 - distance / MORALE_DEATH_EVENT_RADIUS
+	if dead_faction == faction:
+		_change_morale(-ALLY_DEATH_MORALE_LOSS * weight)
+	else:
+		_change_morale(ENEMY_DEATH_MORALE_GAIN * weight)
 
 
 func receive_order(order_mode: String, order_position: Vector3, formation_index: int) -> void:
@@ -204,18 +412,54 @@ func receive_order(order_mode: String, order_position: Vector3, formation_index:
 		_has_order_position = true
 	elif order_mode == ORDER_CHARGE:
 		_has_order_position = false
+		_has_battle_slot = false
+		_battle_slot_released = true
 	_active_target = null
 	_target_refresh_time = 0.0
 	_attack_time = 0.0
 	_has_struck = false
+	_aim_confidence = 0.0
+	_bow_lane_commit_time = 0.0
+	_bow_risk_refresh_time = 0.0
 
 
-func _think_and_move(delta: float, attack_target: Node3D) -> float:
+func assign_battle_slot(slot_position: Vector3, formation_index: int) -> void:
+	_battle_slot_position = slot_position
+	_battle_slot_index = formation_index
+	_has_battle_slot = true
+	_battle_slot_released = false
+	_battle_slot_stage_time = BATTLE_SLOT_MAX_STAGING_SECONDS + randf_range(0.0, 0.55)
+	_bow_lane_commit_time = 0.0
+
+
+func _register_with_combat() -> void:
+	if _registered_with_combat:
+		return
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("register_combat_soldier"):
+		terrain_owner.call("register_combat_soldier", self, faction)
+		_registered_with_combat = true
+
+
+func _unregister_from_combat() -> void:
+	if not _registered_with_combat:
+		return
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("unregister_combat_soldier"):
+		terrain_owner.call("unregister_combat_soldier", self, faction)
+	_registered_with_combat = false
+
+
+func _think_and_move(delta: float, attack_target) -> float:
 	if not _is_attack_target_valid(attack_target):
 		_active_target = null
-		return 0.0
+		return _brake_and_report(delta)
 
-	var to_target := attack_target.global_position - global_position
+	var target := _valid_node3d(attack_target)
+	if target == null:
+		_active_target = null
+		return _brake_and_report(delta)
+
+	_ai_action = AI_ACTION_ENGAGE
+	var to_target := target.global_position - global_position
 	var flat_to_target := Vector3(to_target.x, 0.0, to_target.z)
 	var distance := flat_to_target.length()
 	var direction := Vector3.ZERO
@@ -223,38 +467,209 @@ func _think_and_move(delta: float, attack_target: Node3D) -> float:
 		direction = flat_to_target / distance
 		_face_direction(direction, delta)
 
+	if weapon_type == WEAPON_BOW:
+		return _think_and_move_bow(delta, target, direction, distance)
+
 	if _attack_time > 0.0:
 		_attack_time = maxf(0.0, _attack_time - delta)
-		if weapon_type == WEAPON_BOW:
-			_move_while_charging_bow(delta, direction, distance)
-		else:
-			velocity.x = move_toward(velocity.x, 0.0, move_speed * delta * 4.0)
-			velocity.z = move_toward(velocity.z, 0.0, move_speed * delta * 4.0)
+		_ai_action = AI_ACTION_STRIKE
+		_brake_flat_velocity(delta)
 		_check_attack_strike(distance)
 		return Vector3(velocity.x, 0.0, velocity.z).length()
 
-	if distance <= _attack_range() and _attack_cooldown <= 0.0:
-		_start_attack()
+	if distance <= _attack_range():
+		if _attack_cooldown <= 0.0:
+			_start_attack()
+		else:
+			return _move_for_combat_range(delta, direction, distance)
 	elif _should_hold_position():
-		_move_to_order_position(delta)
+		return _move_to_order_position(delta)
+	elif _should_use_battle_slot(delta, distance):
+		return _move_to_battle_slot(delta)
 	elif distance <= aggro_range and direction != Vector3.ZERO:
-		var desired_distance := 0.0 if weapon_type == WEAPON_SWORD else BOW_ATTACK_RANGE * 0.65
-		var move_direction := direction
-		if desired_distance > 0.0 and distance < desired_distance:
-			move_direction = -direction
-		velocity.x = move_direction.x * move_speed
-		velocity.z = move_direction.z * move_speed
+		return _move_for_combat_range(delta, direction, distance)
 	else:
-		velocity.x = move_toward(velocity.x, 0.0, move_speed * delta)
-		velocity.z = move_toward(velocity.z, 0.0, move_speed * delta)
+		_settle_or_separate(delta)
 
 	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _think_and_move_bow(delta: float, attack_target: Node3D, direction: Vector3, distance: float) -> float:
+	var friendly_fire_risk := 0.0
+	if distance <= BOW_ATTACK_RANGE + TARGET_LEASH_EXTRA:
+		friendly_fire_risk = _cached_bow_friendly_fire_risk(attack_target)
+	_update_bow_aim_confidence(delta, attack_target, distance, friendly_fire_risk)
+
+	if distance <= BOW_PANIC_DISTANCE:
+		return _move_bow_panic(delta, direction)
+	if distance <= BOW_KITE_DISTANCE:
+		return _move_bow_kite(delta, direction)
+
+	if _attack_time > 0.0:
+		_attack_time = maxf(0.0, _attack_time - delta)
+		_ai_action = AI_ACTION_DRAW
+		_move_while_charging_bow(delta, direction, distance)
+		_check_attack_strike(distance)
+		return Vector3(velocity.x, 0.0, velocity.z).length()
+
+	if _should_move_to_order_position():
+		return _move_to_order_position(delta)
+
+	if _should_bow_regroup(distance, friendly_fire_risk):
+		return _move_bow_regroup(delta, attack_target)
+
+	if distance <= _attack_range():
+		if friendly_fire_risk > 0.0:
+			return _move_to_bow_lane(delta, attack_target, direction)
+		if _attack_cooldown <= 0.0 and _bow_has_firing_confidence():
+			_ai_action = AI_ACTION_FIRE
+			_start_attack()
+		else:
+			return _hold_bow_aim(delta, direction, distance)
+	elif _should_hold_position():
+		return _move_to_order_position(delta)
+	elif _should_use_battle_slot(delta, distance):
+		return _move_to_battle_slot(delta)
+	elif distance <= aggro_range and direction != Vector3.ZERO:
+		return _move_for_combat_range(delta, direction, distance)
+	else:
+		return _settle_or_separate(delta)
+
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _hold_bow_aim(delta: float, direction: Vector3, distance: float) -> float:
+	_ai_action = AI_ACTION_FIRE
+	if distance < BOW_BACK_UP_DISTANCE or distance > BOW_ADVANCE_DISTANCE:
+		return _move_for_combat_range(delta, direction, distance)
+	_face_direction(direction, delta)
+	return _brake_and_report(delta)
+
+
+func _move_bow_panic(delta: float, direction: Vector3) -> float:
+	_ai_action = AI_ACTION_PANIC
+	_cancel_bow_draw(AIM_CONFIDENCE_THREAT_LOSS_PER_SECOND * delta)
+	if direction == Vector3.ZERO:
+		return _brake_and_report(delta)
+
+	_face_direction(direction, delta)
+	var escape_direction := -direction
+	if _has_battle_slot:
+		var slot_direction := _flat_direction_to(_battle_slot_position)
+		if slot_direction != Vector3.ZERO:
+			escape_direction = (escape_direction + slot_direction * 0.45).normalized()
+	_set_flat_velocity(escape_direction, move_speed * 1.08, delta, 1.0, direction)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _move_bow_kite(delta: float, direction: Vector3) -> float:
+	_ai_action = AI_ACTION_KITE
+	_cancel_bow_draw(AIM_CONFIDENCE_THREAT_LOSS_PER_SECOND * delta)
+	if direction == Vector3.ZERO:
+		return _brake_and_report(delta)
+
+	_face_direction(direction, delta)
+	var side := Vector3(-direction.z, 0.0, direction.x)
+	if (_formation_index + _battle_slot_index) % 2 != 0:
+		side = -side
+	var kite_direction := (-direction + side.normalized() * 0.28).normalized()
+	_set_flat_velocity(kite_direction, move_speed * 0.9, delta, 1.0, direction)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _should_bow_regroup(distance: float, friendly_fire_risk: float) -> bool:
+	if not _has_battle_slot or not _battle_slot_released or _should_hold_position():
+		return false
+	if distance <= BOW_KITE_DISTANCE:
+		return false
+	if _flat_distance_to(_battle_slot_position) < BOW_REGROUP_DISTANCE:
+		return false
+	return distance > BOW_ADVANCE_DISTANCE or friendly_fire_risk > 0.0 or _aim_confidence < 0.25
+
+
+func _move_bow_regroup(delta: float, attack_target: Node3D) -> float:
+	_ai_action = AI_ACTION_REGROUP
+	var direction_to_slot := _flat_direction_to(_battle_slot_position)
+	if direction_to_slot == Vector3.ZERO:
+		return _brake_and_report(delta)
+
+	var facing_direction := direction_to_slot
+	var target_direction := attack_target.global_position - global_position
+	target_direction.y = 0.0
+	if target_direction.length() > 0.05:
+		facing_direction = target_direction.normalized()
+		_face_direction(facing_direction, delta)
+	else:
+		_face_direction(direction_to_slot, delta)
+	_set_flat_velocity(direction_to_slot, move_speed * 0.72, delta, 1.0, facing_direction)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _cancel_bow_draw(confidence_loss := 0.0) -> void:
+	if weapon_type != WEAPON_BOW:
+		return
+	if _attack_time > 0.0:
+		_attack_time = 0.0
+		_has_struck = false
+	if confidence_loss > 0.0:
+		_aim_confidence = maxf(0.0, _aim_confidence - confidence_loss)
+
+
+func _update_bow_aim_confidence(delta: float, attack_target: Node3D, distance: float, friendly_fire_risk: float) -> void:
+	if weapon_type != WEAPON_BOW:
+		return
+	if attack_target == null or distance > BOW_ATTACK_RANGE or distance <= BOW_KITE_DISTANCE:
+		_aim_confidence = maxf(0.0, _aim_confidence - AIM_CONFIDENCE_THREAT_LOSS_PER_SECOND * delta)
+		return
+	if friendly_fire_risk > 0.0:
+		_aim_confidence = maxf(0.0, _aim_confidence - AIM_CONFIDENCE_UNSAFE_LOSS_PER_SECOND * delta)
+		return
+
+	var flat_speed := Vector3(velocity.x, 0.0, velocity.z).length()
+	if flat_speed > 0.25:
+		var move_loss := AIM_CONFIDENCE_MOVE_LOSS_PER_SECOND * clampf(flat_speed / maxf(move_speed, 0.01), 0.0, 1.5)
+		_aim_confidence = maxf(0.0, _aim_confidence - move_loss * delta)
+		return
+
+	var dexterity_ratio := clampf(float(dexterity) / float(MAX_STAT), 0.0, 1.0)
+	var gain := AIM_CONFIDENCE_GAIN_PER_SECOND * lerpf(0.8, 1.25, dexterity_ratio)
+	if _morale_state == MORALE_SHAKEN:
+		gain *= 0.72
+	elif _morale_state == MORALE_WAVERING:
+		gain *= 0.48
+	_aim_confidence = clampf(_aim_confidence + gain * delta, 0.0, 1.0)
+
+
+func _bow_has_firing_confidence() -> bool:
+	return _aim_confidence >= AIM_CONFIDENCE_REQUIRED
+
+
+func _cached_bow_friendly_fire_risk(attack_target: Node3D) -> float:
+	if attack_target == null:
+		_cached_bow_risk = 0.0
+		_cached_bow_risk_target = null
+		return 0.0
+	if _cached_bow_risk_target != attack_target:
+		_bow_risk_refresh_time = 0.0
+	if _bow_risk_refresh_time <= 0.0:
+		_cached_bow_risk_target = attack_target
+		_cached_bow_risk = _friendly_fire_risk_for_target(attack_target)
+		_bow_risk_refresh_time = _bow_risk_refresh_interval() + randf_range(0.0, 0.05)
+	return _cached_bow_risk
+
+
+func _bow_risk_refresh_interval() -> float:
+	if _is_large_battle():
+		return LARGE_BATTLE_BOW_RISK_REFRESH_SECONDS
+	return BOW_RISK_REFRESH_SECONDS
 
 
 func _start_attack() -> void:
 	_attack_time = _attack_duration_seconds()
 	_attack_cooldown = _attack_cooldown_seconds()
 	_has_struck = false
+	if _uses_imported_visuals and _imported_visual != null and _imported_visual.has_method("play_attack"):
+		_imported_visual.call("play_attack", weapon_type)
 
 
 func _check_attack_strike(distance: float) -> void:
@@ -268,26 +683,47 @@ func _check_attack_strike(distance: float) -> void:
 	_has_struck = true
 	if not _is_attack_target_valid(_active_target) or distance > _attack_range() + 0.35:
 		return
+	var target := _valid_node3d(_active_target)
+	if target == null:
+		_active_target = null
+		return
 
 	if weapon_type == WEAPON_BOW:
-		if _shot_has_friendly_fire_risk(_active_target):
+		if _shot_has_friendly_fire_risk(target):
+			_ai_action = AI_ACTION_LANE
+			_aim_confidence = maxf(0.0, _aim_confidence - AIM_CONFIDENCE_UNSAFE_LOSS_PER_SECOND * 0.25)
 			return
-		_fire_arrow(_active_target)
-	elif _active_target.has_method("take_damage"):
+		_fire_arrow(target)
+	elif target.has_method("take_damage"):
 		var damage := _damage_from_power(BASE_MELEE_DAMAGE)
-		_active_target.take_damage(damage, global_position)
-		_spawn_melee_hit_feedback(_active_target, damage)
+		target.take_damage(damage, global_position)
+		_spawn_melee_hit_feedback(target, damage)
 
 
-func _apply_damage(damage: int) -> void:
+func _apply_damage(damage: int, was_headshot: bool) -> void:
 	if health <= 0:
 		return
 
+	var stagger_seconds := HEADSHOT_STAGGER_SECONDS if was_headshot else BODY_HIT_STAGGER_SECONDS
 	health = maxi(0, health - damage)
-	_flash_time = 0.18
-	_update_health_label()
+	_change_morale(-float(damage) * MORALE_DAMAGE_LOSS_PER_DAMAGE)
+	_interrupt_attack_for_stagger(stagger_seconds)
+	if weapon_type == WEAPON_BOW:
+		_aim_confidence = maxf(0.0, _aim_confidence - AIM_CONFIDENCE_DAMAGE_LOSS)
+	_flash_time = HEADSHOT_HIT_FLASH_SECONDS if was_headshot else BODY_HIT_FLASH_SECONDS
+	_update_hit_flash()
+	_update_health_label(0.0, true)
 	if health <= 0:
 		_die()
+	elif _uses_imported_visuals and _imported_visual != null and _imported_visual.has_method("play_hit"):
+		_imported_visual.call("play_hit", stagger_seconds)
+
+
+func _interrupt_attack_for_stagger(stagger_seconds: float) -> void:
+	if _attack_time > 0.0:
+		_attack_time = 0.0
+		_has_struck = false
+	_attack_cooldown = maxf(_attack_cooldown, stagger_seconds)
 
 
 func _apply_melee_knockback(source_position: Vector3) -> void:
@@ -309,8 +745,9 @@ func _spawn_melee_hit_feedback(target: Node3D, damage: int) -> void:
 	var parent := get_tree().current_scene
 	if parent == null or target == null:
 		return
-	var show_sparks := randf() <= MELEE_SPARK_CHANCE
-	var show_damage_number := randf() <= MELEE_DAMAGE_NUMBER_CHANCE
+	var feedback_multiplier := LARGE_BATTLE_MELEE_FEEDBACK_MULTIPLIER if _is_large_battle() else 1.0
+	var show_sparks := randf() <= MELEE_SPARK_CHANCE * feedback_multiplier
+	var show_damage_number := randf() <= MELEE_DAMAGE_NUMBER_CHANCE * feedback_multiplier
 	if not show_sparks and not show_damage_number:
 		return
 
@@ -351,6 +788,8 @@ func _melee_damage_color(damage: int) -> Color:
 
 
 func _die() -> void:
+	_broadcast_death_morale()
+	_unregister_from_combat()
 	_active_target = null
 	died.emit(faction)
 	remove_from_group(SOLDIER_GROUP)
@@ -360,9 +799,200 @@ func _die() -> void:
 	collision_mask = 0
 	if _label != null:
 		_label.visible = false
+	if _uses_imported_visuals and _imported_visual != null and _imported_visual.has_method("play_death"):
+		_imported_visual.call("play_death")
 	var tween := create_tween()
 	tween.tween_property(self, "scale", Vector3(1.0, 0.15, 1.0), 0.18)
 	tween.tween_callback(Callable(self, "queue_free"))
+
+
+func _base_morale() -> float:
+	var shield_bonus := 2.0 if has_shield else 0.0
+	return clampf(BASE_MORALE + float(power) * MORALE_POWER_BONUS + shield_bonus, 0.0, MORALE_MAX)
+
+
+func _change_morale(amount: float) -> void:
+	_morale = clampf(_morale + amount, 0.0, MORALE_MAX)
+	if _morale <= MORALE_ROUT_THRESHOLD:
+		_start_rout()
+
+
+func _broadcast_death_morale() -> void:
+	for node in _nearby_combat_soldiers(global_position, MORALE_DEATH_EVENT_RADIUS):
+		if node == self:
+			continue
+		if node.has_method("receive_morale_event"):
+			node.call("receive_morale_event", faction, global_position)
+
+
+func _update_morale(delta: float) -> void:
+	if _is_routing():
+		_rout_time = maxf(0.0, _rout_time - delta)
+
+	_morale_check_time = maxf(0.0, _morale_check_time - delta)
+	if _morale_check_time > 0.0:
+		return
+
+	_morale_check_time = _morale_check_interval() + randf_range(0.0, 0.08)
+	var counts := _nearby_morale_counts()
+	var target_morale := _morale_target(counts)
+	var rate := MORALE_RECOVERY_PER_SECOND if target_morale > _morale else MORALE_PRESSURE_LOSS_PER_SECOND
+	_morale = move_toward(_morale, target_morale, rate * _morale_check_interval())
+	_update_morale_state(counts)
+
+
+func _nearby_morale_counts() -> Dictionary:
+	var counts := {
+		"allies": 0,
+		"enemies": 0,
+	}
+	var radius_squared := MORALE_NEARBY_RADIUS * MORALE_NEARBY_RADIUS
+	for node in _nearby_combat_soldiers(global_position, MORALE_NEARBY_RADIUS):
+		if node == self:
+			continue
+		var soldier := node as Node3D
+		if soldier == null or soldier.global_position.distance_squared_to(global_position) > radius_squared:
+			continue
+		if not soldier.has_method("is_alive") or not soldier.is_alive():
+			continue
+		if soldier.has_method("get_faction") and soldier.get_faction() == faction:
+			counts["allies"] += 1
+		else:
+			counts["enemies"] += 1
+
+	if faction == FACTION_ENEMY and player_target != null and player_target.global_position.distance_squared_to(global_position) <= radius_squared:
+		counts["enemies"] += 1
+
+	return counts
+
+
+func _morale_target(counts: Dictionary) -> float:
+	var health_ratio := clampf(float(health) / float(max_health), 0.0, 1.0)
+	var allies := int(counts.get("allies", 0))
+	var enemies := int(counts.get("enemies", 0))
+	var target := _base_morale()
+	target -= (1.0 - health_ratio) * MORALE_WOUND_LOSS
+	target -= _fatigue_ratio() * MORALE_FATIGUE_LOSS
+	target += float(mini(allies, 5)) * MORALE_ALLY_SUPPORT
+	target -= float(mini(enemies, 5)) * MORALE_ENEMY_PRESSURE
+	if enemies > allies + 1:
+		target -= float(enemies - allies - 1) * MORALE_OUTNUMBERED_LOSS
+	if _should_hold_position():
+		target += 3.0
+	return clampf(target, 0.0, MORALE_MAX)
+
+
+func _update_morale_state(counts: Dictionary) -> void:
+	if _morale <= MORALE_ROUT_THRESHOLD:
+		_start_rout()
+		return
+
+	if _is_routing():
+		var allies := int(counts.get("allies", 0))
+		var enemies := int(counts.get("enemies", 0))
+		if _rout_time <= 0.0 and _morale >= MORALE_RALLY_THRESHOLD and allies >= enemies:
+			_morale_state = MORALE_WAVERING
+		return
+
+	if _morale <= MORALE_WAVERING_THRESHOLD:
+		_morale_state = MORALE_WAVERING
+	elif _morale <= MORALE_SHAKEN_THRESHOLD:
+		_morale_state = MORALE_SHAKEN
+	else:
+		_morale_state = MORALE_STEADY
+
+
+func _start_rout() -> void:
+	if _morale_state == MORALE_ROUTING:
+		return
+
+	_morale_state = MORALE_ROUTING
+	_rout_time = MORALE_ROUT_MIN_SECONDS + randf_range(0.0, 1.6)
+	_rout_direction = _calculate_rout_direction()
+	_active_target = null
+	_attack_time = 0.0
+	_has_struck = false
+
+
+func _is_routing() -> bool:
+	return _morale_state == MORALE_ROUTING
+
+
+func _calculate_rout_direction() -> Vector3:
+	var direction := Vector3.ZERO
+	var radius_squared := MORALE_ROUT_SEARCH_RADIUS * MORALE_ROUT_SEARCH_RADIUS
+	for node in _nearby_combat_soldiers(global_position, MORALE_ROUT_SEARCH_RADIUS, _opposing_faction()):
+		var enemy := node as Node3D
+		if enemy == null or enemy.global_position.distance_squared_to(global_position) > radius_squared:
+			continue
+		if enemy.has_method("is_alive") and not enemy.is_alive():
+			continue
+		var away := global_position - enemy.global_position
+		away.y = 0.0
+		if away.length() > 0.01:
+			direction += away.normalized()
+
+	if faction == FACTION_ENEMY and player_target != null and player_target.global_position.distance_squared_to(global_position) <= radius_squared:
+		var away_from_player := global_position - player_target.global_position
+		away_from_player.y = 0.0
+		if away_from_player.length() > 0.01:
+			direction += away_from_player.normalized()
+
+	if direction.length() <= 0.01:
+		direction = global_transform.basis.z
+		direction.y = 0.0
+	if direction.length() <= 0.01:
+		direction = Vector3.BACK
+	return direction.normalized()
+
+
+func _move_routing(delta: float) -> float:
+	_ai_action = AI_ACTION_ROUT
+	if _rout_direction.length() <= 0.01:
+		_rout_direction = _calculate_rout_direction()
+	_face_direction(_rout_direction, delta)
+	_set_flat_velocity(_rout_direction, move_speed * MORALE_ROUT_SPEED_MULTIPLIER, delta, 0.25, _rout_direction)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _update_fatigue(delta: float, flat_speed: float) -> void:
+	var gain := 0.0
+	var speed_ratio := clampf(flat_speed / maxf(move_speed, 0.01), 0.0, 1.5)
+	if speed_ratio > 0.25:
+		gain += FATIGUE_MOVE_GAIN_PER_SECOND * speed_ratio
+	if _attack_time > 0.0:
+		if weapon_type == WEAPON_BOW:
+			gain += FATIGUE_BOW_DRAW_GAIN_PER_SECOND
+		else:
+			gain += FATIGUE_ATTACK_GAIN_PER_SECOND
+	if _is_routing():
+		gain += FATIGUE_ROUT_GAIN_PER_SECOND
+
+	if gain > 0.0:
+		_fatigue = clampf(_fatigue + gain * delta, 0.0, FATIGUE_MAX)
+	else:
+		_fatigue = clampf(_fatigue - FATIGUE_RECOVERY_PER_SECOND * delta, 0.0, FATIGUE_MAX)
+
+
+func _fatigue_ratio() -> float:
+	return clampf(_fatigue / FATIGUE_MAX, 0.0, 1.0)
+
+
+func _movement_efficiency() -> float:
+	var efficiency := 1.0 - _fatigue_ratio() * FATIGUE_SPEED_PENALTY
+	if _morale_state == MORALE_SHAKEN:
+		efficiency -= 0.04
+	elif _morale_state == MORALE_WAVERING:
+		efficiency -= 0.08
+	return clampf(efficiency, 0.62, 1.05)
+
+
+func _morale_attack_penalty() -> float:
+	if _morale_state == MORALE_WAVERING:
+		return 0.16
+	if _morale_state == MORALE_SHAKEN:
+		return 0.08
+	return 0.0
 
 
 func _update_active_target(delta: float) -> void:
@@ -375,26 +1005,34 @@ func _update_active_target(delta: float) -> void:
 
 
 func _target_refresh_interval() -> float:
+	var multiplier := LARGE_BATTLE_TARGET_REFRESH_MULTIPLIER if _is_large_battle() else 1.0
 	if weapon_type == WEAPON_BOW:
-		return randf_range(BOW_TARGET_REFRESH_MIN_SECONDS, BOW_TARGET_REFRESH_MAX_SECONDS)
-	return randf_range(MELEE_TARGET_REFRESH_MIN_SECONDS, MELEE_TARGET_REFRESH_MAX_SECONDS)
+		return randf_range(BOW_TARGET_REFRESH_MIN_SECONDS, BOW_TARGET_REFRESH_MAX_SECONDS) * multiplier
+	return randf_range(MELEE_TARGET_REFRESH_MIN_SECONDS, MELEE_TARGET_REFRESH_MAX_SECONDS) * multiplier
 
 
-func _is_attack_target_valid(attack_target: Node3D) -> bool:
-	if attack_target == null or not is_instance_valid(attack_target):
+func _valid_node3d(value) -> Node3D:
+	if value == null or not is_instance_valid(value):
+		return null
+	return value as Node3D
+
+
+func _is_attack_target_valid(attack_target) -> bool:
+	var target := _valid_node3d(attack_target)
+	if target == null:
 		return false
-	if attack_target.has_method("is_alive") and not attack_target.is_alive():
+	if target.has_method("is_alive") and not target.is_alive():
 		return false
-	if attack_target.has_method("get_faction") and attack_target.get_faction() == faction:
+	if target.has_method("get_faction") and target.get_faction() == faction:
 		return false
 
-	var distance_squared := global_position.distance_squared_to(attack_target.global_position)
+	var distance_squared := global_position.distance_squared_to(target.global_position)
 	if _should_hold_position():
 		if weapon_type == WEAPON_BOW:
 			var bow_hold_range := BOW_ATTACK_RANGE + TARGET_LEASH_EXTRA
 			return distance_squared <= bow_hold_range * bow_hold_range
 		var defend_range := HOLD_DEFEND_RADIUS + TARGET_LEASH_EXTRA
-		return attack_target.global_position.distance_squared_to(_order_position) <= defend_range * defend_range
+		return target.global_position.distance_squared_to(_order_position) <= defend_range * defend_range
 
 	var leash_range := aggro_range + TARGET_LEASH_EXTRA
 	return distance_squared <= leash_range * leash_range
@@ -404,14 +1042,63 @@ func _faction_group(group_faction: String) -> String:
 	return "%s_%s" % [SOLDIER_GROUP, group_faction]
 
 
-func _own_faction_group() -> String:
-	return _faction_group(faction)
-
-
-func _opposing_faction_group() -> String:
+func _opposing_faction() -> String:
 	if faction == FACTION_ENEMY:
-		return _faction_group(FACTION_FRIENDLY)
-	return _faction_group(FACTION_ENEMY)
+		return FACTION_FRIENDLY
+	return FACTION_ENEMY
+
+
+func _all_combat_soldiers() -> Array:
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_combat_soldiers"):
+		return Array(terrain_owner.call("get_combat_soldiers"))
+	return get_tree().get_nodes_in_group(SOLDIER_GROUP)
+
+
+func _combat_soldiers_for_faction(soldier_faction: String) -> Array:
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_combat_soldiers_for_faction"):
+		return Array(terrain_owner.call("get_combat_soldiers_for_faction", soldier_faction))
+	return get_tree().get_nodes_in_group(_faction_group(soldier_faction))
+
+
+func _nearby_combat_soldiers(center: Vector3, radius: float, soldier_faction := "") -> Array:
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_nearby_combat_soldiers"):
+		return Array(terrain_owner.call("get_nearby_combat_soldiers", center, radius, soldier_faction))
+
+	var source := _all_combat_soldiers()
+	if soldier_faction != "":
+		source = _combat_soldiers_for_faction(soldier_faction)
+
+	var result: Array[Node3D] = []
+	var radius_squared := radius * radius
+	for node in source:
+		var soldier := node as Node3D
+		if soldier == null or not is_instance_valid(soldier):
+			continue
+		if soldier.global_position.distance_squared_to(center) <= radius_squared:
+			result.append(soldier)
+	return result
+
+
+func _battle_soldier_count() -> int:
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_combat_soldier_count"):
+		return int(terrain_owner.call("get_combat_soldier_count"))
+	return get_tree().get_nodes_in_group(SOLDIER_GROUP).size()
+
+
+func _is_large_battle() -> bool:
+	return _battle_soldier_count() >= LARGE_BATTLE_SOLDIER_COUNT
+
+
+func _morale_check_interval() -> float:
+	if _is_large_battle():
+		return MORALE_CHECK_INTERVAL * LARGE_BATTLE_MORALE_CHECK_MULTIPLIER
+	return MORALE_CHECK_INTERVAL
+
+
+func _separation_refresh_seconds() -> float:
+	if _is_large_battle():
+		return LARGE_BATTLE_SEPARATION_REFRESH_SECONDS
+	return SMALL_BATTLE_SEPARATION_REFRESH_SECONDS
 
 
 func _choose_target() -> Node3D:
@@ -428,7 +1115,7 @@ func _choose_target() -> Node3D:
 		if best_target != null:
 			best_distance_squared = global_position.distance_squared_to(best_target.global_position)
 
-	for node in get_tree().get_nodes_in_group(_opposing_faction_group()):
+	for node in _combat_soldiers_for_faction(_opposing_faction()):
 		var candidate := node as Node3D
 		if candidate == null or not _is_attack_target_valid(candidate):
 			continue
@@ -445,7 +1132,7 @@ func _choose_hold_defense_target() -> Node3D:
 	var bow_candidates: Array[Node3D] = []
 	var bow_distances: Array[float] = []
 
-	for node in get_tree().get_nodes_in_group(_opposing_faction_group()):
+	for node in _combat_soldiers_for_faction(_opposing_faction()):
 		var candidate := node as Node3D
 		if candidate == null or not _is_attack_target_valid(candidate):
 			continue
@@ -475,7 +1162,7 @@ func _choose_bow_target() -> Node3D:
 	if faction == FACTION_ENEMY and _is_attack_target_valid(player_target):
 		_remember_bow_candidate(candidates, distances, player_target, global_position.distance_squared_to(player_target.global_position))
 
-	for node in get_tree().get_nodes_in_group(_opposing_faction_group()):
+	for node in _combat_soldiers_for_faction(_opposing_faction()):
 		var candidate := node as Node3D
 		if candidate == null or not _is_attack_target_valid(candidate):
 			continue
@@ -496,12 +1183,23 @@ func _lowest_risk_bow_candidate(candidates: Array[Node3D], distances: Array[floa
 			continue
 		var distance := sqrt(distances[index])
 		var friendly_fire_risk := _friendly_fire_risk_for_target(candidate)
-		var score := distance + friendly_fire_risk * FRIENDLY_FIRE_SCORE_PENALTY
+		var score := distance + friendly_fire_risk * FRIENDLY_FIRE_SCORE_PENALTY - _bow_target_priority_bonus(candidate, distance, friendly_fire_risk)
 		if score < best_score:
 			best_score = score
 			best_target = candidate
 
 	return best_target
+
+
+func _bow_target_priority_bonus(candidate: Node3D, distance: float, friendly_fire_risk: float) -> float:
+	var bonus := 0.0
+	if faction == FACTION_ENEMY and candidate == player_target:
+		bonus += 5.0
+	if distance < BOW_BACK_UP_DISTANCE:
+		bonus += (BOW_BACK_UP_DISTANCE - distance) * 1.25
+	if friendly_fire_risk <= 0.0:
+		bonus += 2.0
+	return bonus
 
 
 func _remember_bow_candidate(candidates: Array[Node3D], distances: Array[float], candidate: Node3D, distance_squared: float) -> void:
@@ -564,7 +1262,7 @@ func _attack_strike_time_seconds() -> float:
 func _attack_cooldown_seconds() -> float:
 	if weapon_type == WEAPON_BOW:
 		return 0.0
-	return SWORD_ATTACK_COOLDOWN
+	return SWORD_ATTACK_COOLDOWN * (1.0 + _fatigue_ratio() * FATIGUE_ATTACK_COOLDOWN_PENALTY + _morale_attack_penalty())
 
 
 func _move_while_charging_bow(delta: float, direction: Vector3, distance: float) -> void:
@@ -573,43 +1271,321 @@ func _move_while_charging_bow(delta: float, direction: Vector3, distance: float)
 		return
 
 	if direction == Vector3.ZERO:
-		velocity.x = move_toward(velocity.x, 0.0, move_speed * delta)
-		velocity.z = move_toward(velocity.z, 0.0, move_speed * delta)
+		_brake_flat_velocity(delta)
 		return
 
-	var desired_distance := BOW_ATTACK_RANGE * 0.65
-	var move_direction := direction
-	if distance < desired_distance:
+	var move_direction := Vector3.ZERO
+	if distance < BOW_BACK_UP_DISTANCE:
 		move_direction = -direction
+	elif distance > BOW_ADVANCE_DISTANCE:
+		move_direction = direction
+	else:
+		_brake_flat_velocity(delta)
+		return
 	var charge_speed := move_speed * BOW_CHARGING_MOVE_MULTIPLIER
-	velocity.x = move_direction.x * charge_speed
-	velocity.z = move_direction.z * charge_speed
+	_set_flat_velocity(move_direction, charge_speed, delta, 1.0, direction)
 
 
 func _should_hold_position() -> bool:
 	return faction == FACTION_FRIENDLY and _order_mode == ORDER_HOLD and _has_order_position
 
 
+func _should_move_to_order_position() -> bool:
+	return _should_hold_position() and _flat_distance_to(_order_position) > HOLD_POSITION_ARRIVAL_DISTANCE
+
+
 func _move_to_order_position(delta: float, speed_multiplier := 1.0) -> float:
 	var to_position := _order_position - global_position
 	var flat_to_position := Vector3(to_position.x, 0.0, to_position.z)
 	var distance := flat_to_position.length()
+	_ai_action = AI_ACTION_HOLD
 	if distance <= HOLD_POSITION_ARRIVAL_DISTANCE:
-		velocity.x = move_toward(velocity.x, 0.0, move_speed * delta * 3.0)
-		velocity.z = move_toward(velocity.z, 0.0, move_speed * delta * 3.0)
-		return Vector3(velocity.x, 0.0, velocity.z).length()
+		return _brake_and_report(delta)
 
 	var direction := flat_to_position / distance
 	_face_direction(direction, delta)
 	var order_speed := move_speed * speed_multiplier
-	velocity.x = direction.x * order_speed
-	velocity.z = direction.z * order_speed
-	return order_speed
+	_set_flat_velocity(direction, order_speed, delta, 1.0, direction)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _should_use_battle_slot(delta: float, target_distance: float) -> bool:
+	if not _has_battle_slot or _battle_slot_released or _should_hold_position():
+		return false
+
+	var release_distance := BATTLE_SLOT_ARCHER_RELEASE_DISTANCE if weapon_type == WEAPON_BOW else BATTLE_SLOT_RELEASE_DISTANCE
+	if target_distance <= release_distance:
+		_battle_slot_released = true
+		return false
+
+	var slot_distance := _flat_distance_to(_battle_slot_position)
+	if slot_distance <= BATTLE_SLOT_SOFT_RELEASE_DISTANCE:
+		_battle_slot_released = true
+		return false
+
+	_battle_slot_stage_time = maxf(0.0, _battle_slot_stage_time - delta)
+	if _battle_slot_stage_time <= 0.0:
+		_battle_slot_released = true
+		return false
+
+	return slot_distance > BATTLE_SLOT_ARRIVAL_DISTANCE
+
+
+func _move_to_battle_slot(delta: float, speed_multiplier := 1.0) -> float:
+	var to_position := _battle_slot_position - global_position
+	var flat_to_position := Vector3(to_position.x, 0.0, to_position.z)
+	var distance := flat_to_position.length()
+	_ai_action = AI_ACTION_ADVANCE
+	if distance <= BATTLE_SLOT_ARRIVAL_DISTANCE:
+		_battle_slot_released = true
+		return _brake_and_report(delta)
+
+	var direction := flat_to_position / distance
+	_face_direction(direction, delta)
+	_set_flat_velocity(direction, move_speed * speed_multiplier, delta, 1.0, direction)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _move_to_bow_lane(delta: float, attack_target: Node3D, direction: Vector3) -> float:
+	if direction == Vector3.ZERO:
+		return _brake_and_report(delta)
+
+	_ai_action = AI_ACTION_LANE
+	_face_direction(direction, delta)
+	var lane_direction := _best_bow_lane_direction(attack_target, direction)
+	_set_flat_velocity(lane_direction, move_speed * BOW_LANE_MOVE_MULTIPLIER, delta, 1.0, direction)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _move_for_combat_range(delta: float, direction: Vector3, distance: float) -> float:
+	if direction == Vector3.ZERO:
+		return _settle_or_separate(delta)
+
+	var move_direction := Vector3.ZERO
+	var speed_multiplier := 1.0
+	if weapon_type == WEAPON_BOW:
+		if distance < BOW_BACK_UP_DISTANCE:
+			move_direction = -direction
+			speed_multiplier = 0.62
+		elif distance > BOW_ADVANCE_DISTANCE:
+			move_direction = direction
+		else:
+			return _brake_and_report(delta)
+	else:
+		if distance < MELEE_BACK_UP_DISTANCE:
+			move_direction = -direction
+			speed_multiplier = 0.45
+		elif distance > MELEE_ADVANCE_DISTANCE:
+			move_direction = direction
+		else:
+			return _brake_and_report(delta)
+
+	_set_flat_velocity(move_direction, move_speed * speed_multiplier, delta, 1.0, direction)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _best_bow_lane_direction(attack_target: Node3D, direction: Vector3) -> Vector3:
+	if _bow_lane_commit_time > 0.0 and _bow_lane_direction != Vector3.ZERO:
+		return _bow_lane_direction
+
+	var side := Vector3(-direction.z, 0.0, direction.x)
+	if side.length() <= 0.01:
+		side = Vector3.RIGHT
+	side = side.normalized()
+
+	var current_risk := _friendly_fire_risk_for_target(attack_target)
+	var best_risk := current_risk
+	var best_direction := side if (_formation_index + _battle_slot_index) % 2 == 0 else -side
+	var best_score := _score_bow_position(global_position, attack_target, current_risk)
+	var candidates: Array[Vector3] = [
+		side,
+		-side,
+		(side - direction * 0.35).normalized(),
+		(-side - direction * 0.35).normalized(),
+		-direction,
+	]
+
+	for candidate_direction in candidates:
+		if candidate_direction == Vector3.ZERO:
+			continue
+		var normalized_direction := candidate_direction.normalized()
+		var candidate_position := global_position + normalized_direction * BOW_LANE_STEP_DISTANCE
+		var candidate_forward := attack_target.global_position - candidate_position
+		candidate_forward.y = 0.0
+		if candidate_forward.length() <= 0.01:
+			candidate_forward = direction
+		else:
+			candidate_forward = candidate_forward.normalized()
+		var candidate_origin := _bow_arrow_origin_from_position(candidate_position, candidate_forward)
+		var risk := _friendly_fire_risk_for_target_from_origin(attack_target, candidate_origin)
+		var score := _score_bow_position(candidate_position, attack_target, risk)
+		if score > best_score:
+			best_score = score
+			best_risk = risk
+			best_direction = normalized_direction
+
+	if current_risk - best_risk < BOW_LANE_MIN_RISK_IMPROVEMENT:
+		if (_formation_index + _battle_slot_index) % 2 == 0:
+			best_direction = side
+		else:
+			best_direction = -side
+
+	_bow_lane_direction = best_direction.normalized()
+	_bow_lane_commit_time = BOW_LANE_COMMIT_SECONDS + randf_range(0.0, 0.18)
+	return _bow_lane_direction
+
+
+func _score_bow_position(position: Vector3, attack_target: Node3D, friendly_fire_risk: float) -> float:
+	var flat_distance := Vector2(position.x, position.z).distance_to(Vector2(attack_target.global_position.x, attack_target.global_position.z))
+	var ideal_distance := (BOW_BACK_UP_DISTANCE + BOW_ADVANCE_DISTANCE) * 0.5
+	var score := -friendly_fire_risk * BOW_POSITION_RISK_PENALTY
+	score -= absf(flat_distance - ideal_distance) * BOW_POSITION_RANGE_WEIGHT
+
+	if _has_battle_slot:
+		score -= Vector2(position.x, position.z).distance_to(Vector2(_battle_slot_position.x, _battle_slot_position.z)) * BOW_POSITION_SLOT_WEIGHT
+
+	if _should_score_bow_terrain():
+		var height_delta := _terrain_height_at(position) - attack_target.global_position.y
+		score += clampf(height_delta, -2.0, 4.0) * BOW_POSITION_HEIGHT_WEIGHT
+		score -= _terrain_slope_at(position) * BOW_POSITION_SLOPE_PENALTY
+
+	return score
+
+
+func _should_score_bow_terrain() -> bool:
+	return _battle_soldier_count() <= BOW_TERRAIN_SCORE_MAX_SOLDIERS
+
+
+func _terrain_height_at(position: Vector3) -> float:
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_combat_terrain_height"):
+		return float(terrain_owner.call("get_combat_terrain_height", position))
+	return position.y
+
+
+func _terrain_slope_at(position: Vector3) -> float:
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_combat_terrain_slope"):
+		return float(terrain_owner.call("get_combat_terrain_slope", position))
+	return 0.0
+
+
+func _set_flat_velocity(move_direction: Vector3, desired_speed: float, delta: float, separation_weight := 1.0, facing_direction := Vector3.ZERO) -> void:
+	var flat_direction := Vector3(move_direction.x, 0.0, move_direction.z)
+	if flat_direction.length() > 0.01:
+		flat_direction = flat_direction.normalized()
+	else:
+		flat_direction = Vector3.ZERO
+
+	if separation_weight > 0.0:
+		var separation := _ally_separation_direction(delta)
+		if separation != Vector3.ZERO:
+			flat_direction += separation * ALLY_SEPARATION_STRENGTH * separation_weight
+
+	if flat_direction.length() <= 0.01:
+		_brake_flat_velocity(delta)
+		return
+
+	flat_direction = flat_direction.normalized()
+	var adjusted_desired_speed := desired_speed * _movement_efficiency() * _directional_speed_multiplier(flat_direction, facing_direction)
+	var acceleration := move_speed * _movement_efficiency() * FLAT_ACCELERATION_MULTIPLIER * delta
+	velocity.x = move_toward(velocity.x, flat_direction.x * adjusted_desired_speed, acceleration)
+	velocity.z = move_toward(velocity.z, flat_direction.z * adjusted_desired_speed, acceleration)
+
+
+func _directional_speed_multiplier(flat_direction: Vector3, facing_direction := Vector3.ZERO) -> float:
+	var forward := Vector3(facing_direction.x, 0.0, facing_direction.z)
+	if forward.length_squared() <= 0.0001:
+		forward = -global_transform.basis.z
+		forward.y = 0.0
+	if forward.length_squared() <= 0.0001:
+		return 1.0
+
+	forward = forward.normalized()
+	var right := Vector3(-forward.z, 0.0, forward.x)
+	var local_x := flat_direction.dot(right) / STRAFE_SPEED_DIVISOR
+	var local_y := flat_direction.dot(forward)
+	if local_y < 0.0:
+		local_y /= BACKPEDAL_SPEED_DIVISOR
+	return clampf(Vector2(local_x, local_y).length(), 0.0, 1.0)
+
+
+func _settle_or_separate(delta: float) -> float:
+	var separation := _ally_separation_direction(delta)
+	if separation != Vector3.ZERO:
+		_set_flat_velocity(separation, move_speed * ALLY_SEPARATION_IDLE_MOVE_MULTIPLIER, delta, 0.0, separation)
+	else:
+		_brake_flat_velocity(delta)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _brake_and_report(delta: float) -> float:
+	_brake_flat_velocity(delta)
+	return Vector3(velocity.x, 0.0, velocity.z).length()
+
+
+func _brake_flat_velocity(delta: float) -> void:
+	var brake := move_speed * _movement_efficiency() * FLAT_BRAKE_MULTIPLIER * delta
+	velocity.x = move_toward(velocity.x, 0.0, brake)
+	velocity.z = move_toward(velocity.z, 0.0, brake)
+
+
+func _ally_separation_direction(delta: float) -> Vector3:
+	_separation_refresh_time = maxf(0.0, _separation_refresh_time - delta)
+	if _separation_refresh_time > 0.0:
+		return _cached_separation_direction
+
+	_separation_refresh_time = _separation_refresh_seconds() + randf_range(0.0, 0.025)
+	var steering := Vector3.ZERO
+	var checked := 0
+	for node in _nearby_combat_soldiers(global_position, ALLY_SEPARATION_RADIUS, faction):
+		if node == self:
+			continue
+		var ally := node as Node3D
+		if ally == null or not _is_attack_target_valid_for_friendly_fire(ally):
+			continue
+
+		var offset := global_position - ally.global_position
+		offset.y = 0.0
+		var distance := offset.length()
+		if distance > ALLY_SEPARATION_RADIUS:
+			continue
+		if distance <= 0.01:
+			var angle := float(_formation_index + _battle_slot_index + checked * 11) * 2.399963
+			offset = Vector3(cos(angle), 0.0, sin(angle))
+			distance = 0.01
+
+		var weight := (ALLY_SEPARATION_RADIUS - distance) / ALLY_SEPARATION_RADIUS
+		steering += offset.normalized() * weight
+		checked += 1
+		if checked >= ALLY_SEPARATION_MAX_NEIGHBORS:
+			break
+
+	if steering.length() <= 0.01:
+		_cached_separation_direction = Vector3.ZERO
+	else:
+		_cached_separation_direction = steering.normalized()
+	return _cached_separation_direction
+
+
+func _flat_distance_to(position: Vector3) -> float:
+	return Vector2(global_position.x, global_position.z).distance_to(Vector2(position.x, position.z))
+
+
+func _flat_direction_to(position: Vector3) -> Vector3:
+	var to_position := position - global_position
+	var flat_to_position := Vector3(to_position.x, 0.0, to_position.z)
+	if flat_to_position.length() <= 0.05:
+		return Vector3.ZERO
+	return flat_to_position.normalized()
 
 
 func _aim_spread_radians() -> float:
 	var dexterity_ratio := clampf(float(dexterity) / float(MAX_STAT), 0.0, 1.0)
-	return lerpf(deg_to_rad(5.0), 0.0, dexterity_ratio)
+	var morale_spread := 0.0
+	if _morale_state == MORALE_WAVERING:
+		morale_spread = deg_to_rad(2.4)
+	elif _morale_state == MORALE_SHAKEN:
+		morale_spread = deg_to_rad(1.2)
+	return lerpf(deg_to_rad(5.0), 0.0, dexterity_ratio) + deg_to_rad(FATIGUE_AIM_SPREAD_DEGREES) * _fatigue_ratio() + morale_spread
 
 
 func _fire_arrow(attack_target: Node3D) -> void:
@@ -629,10 +1605,19 @@ func _fire_arrow(attack_target: Node3D) -> void:
 	arrow.set_script(HumanProjectile)
 	parent.add_child(arrow)
 	arrow.call("start", arrow_origin, direction, ARROW_SPEED, _arrow_damage_from_dexterity(), faction, self)
+	_aim_confidence = maxf(0.0, _aim_confidence - AIM_CONFIDENCE_SHOT_COST)
 
 
 func _bow_arrow_origin() -> Vector3:
 	return global_position + Vector3(0.0, ARROW_RELEASE_HEIGHT, 0.0) - global_transform.basis.z * ARROW_FORWARD_OFFSET
+
+
+func _bow_arrow_origin_from_position(origin_position: Vector3, forward_direction: Vector3) -> Vector3:
+	var flat_forward := Vector3(forward_direction.x, 0.0, forward_direction.z)
+	if flat_forward.length() <= 0.01:
+		flat_forward = -global_transform.basis.z
+	flat_forward = flat_forward.normalized()
+	return origin_position + Vector3(0.0, ARROW_RELEASE_HEIGHT, 0.0) + flat_forward * ARROW_FORWARD_OFFSET
 
 
 func _shot_has_friendly_fire_risk(attack_target: Node3D) -> bool:
@@ -641,10 +1626,16 @@ func _shot_has_friendly_fire_risk(attack_target: Node3D) -> bool:
 
 func _friendly_fire_risk_for_target(attack_target: Node3D) -> float:
 	var arrow_origin := _bow_arrow_origin()
+	return _friendly_fire_risk_for_target_from_origin(attack_target, arrow_origin)
+
+
+func _friendly_fire_risk_for_target_from_origin(attack_target: Node3D, arrow_origin: Vector3) -> float:
 	var aim_point := _predicted_bow_aim_point(arrow_origin, attack_target)
 	var risk := 0.0
+	var lane_center := (arrow_origin + aim_point) * 0.5
+	var lane_query_radius := arrow_origin.distance_to(aim_point) * 0.5 + FRIENDLY_FIRE_LANE_RADIUS
 
-	for node in get_tree().get_nodes_in_group(_own_faction_group()):
+	for node in _nearby_combat_soldiers(lane_center, lane_query_radius, faction):
 		if node == self or node == attack_target:
 			continue
 		var blocker := node as Node3D
@@ -774,6 +1765,9 @@ func _build_body() -> void:
 	head_shape.position = HEAD_CENTER
 	add_child(head_shape)
 
+	if _try_build_imported_visual():
+		return
+
 	_body_mesh = _add_capsule("Body", Vector3(0.0, 0.86, 0.0), 0.29, 1.05, _cloth_material)
 	_head_mesh = _add_sphere("Head", HEAD_CENTER, Vector3(0.4, 0.37, 0.4), _base_material)
 	_add_capsule("Helmet", Vector3(0.0, 1.75, 0.0), 0.42, 0.24, _metal_material, true)
@@ -786,7 +1780,34 @@ func _build_body() -> void:
 	_right_leg_mesh = _add_limb("RightLeg", Vector3(0.16, 0.28, 0.0), -4.0, 1.12)
 
 
+func _try_build_imported_visual() -> bool:
+	if not use_imported_visuals:
+		return false
+
+	var visual := QuaterniusSoldierVisualScene.instantiate() as Node3D
+	if visual == null:
+		return false
+	visual.name = "QuaterniusSoldierVisual"
+
+	if not visual.has_method("setup_visual"):
+		visual.free()
+		return false
+
+	var loaded := bool(visual.call("setup_visual", faction, weapon_type, has_shield))
+	if not loaded:
+		visual.free()
+		return false
+
+	_imported_visual = visual
+	_uses_imported_visuals = true
+	add_child(_imported_visual)
+	return true
+
+
 func _build_equipment() -> void:
+	if _uses_imported_visuals:
+		return
+
 	if weapon_type == WEAPON_SWORD:
 		_build_sword()
 	elif weapon_type == WEAPON_BOW:
@@ -886,15 +1907,37 @@ func _add_health_label() -> void:
 	add_child(_label)
 
 
-func _update_health_label() -> void:
+func _update_health_label(delta := 0.0, force := false) -> void:
 	if _label == null:
 		return
 
+	_label_update_time = maxf(0.0, _label_update_time - delta)
+	var should_show := _should_show_health_label()
+	if _label.visible != should_show:
+		_label.visible = should_show
+	if not should_show:
+		return
+	if not force and _label_update_time > 0.0:
+		return
+
+	_label_update_time = LABEL_UPDATE_SECONDS + randf_range(0.0, 0.06)
 	var role := "Archer" if weapon_type == WEAPON_BOW else "Swordsman"
 	var name_text := "Enemy %s" % role
 	if faction == FACTION_FRIENDLY:
 		name_text = "Ally %s" % role
-	_label.text = "%s\n%d/%d" % [name_text, health, max_health]
+	var label_text := "%s\n%d/%d\n%s | %s\nM %.0f F %.0f" % [name_text, health, max_health, _ai_action, _morale_state, _morale, _fatigue]
+	if label_text != _last_label_text:
+		_label.text = label_text
+		_last_label_text = label_text
+
+
+func _should_show_health_label() -> bool:
+	if _battle_soldier_count() <= LABEL_VISIBLE_MAX_SOLDIERS:
+		return true
+	if _flash_time <= 0.0 or player_target == null:
+		return false
+	var close_to_player := player_target.global_position.distance_squared_to(global_position) <= 100.0
+	return close_to_player
 
 
 func _cloth_color() -> Color:
@@ -920,11 +1963,7 @@ func _add_limb(node_name: String, position: Vector3, z_rotation: float, height_s
 func _add_capsule(node_name: String, position: Vector3, radius: float, height: float, material: Material, is_detail := false, remember := true) -> MeshInstance3D:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = node_name
-	var mesh := CapsuleMesh.new()
-	mesh.radius = radius
-	mesh.height = height
-	mesh.radial_segments = 10
-	mesh_instance.mesh = mesh
+	mesh_instance.mesh = _cached_capsule_mesh(radius, height, 10)
 	mesh_instance.position = position
 	mesh_instance.material_override = material
 	if is_detail:
@@ -938,10 +1977,7 @@ func _add_capsule(node_name: String, position: Vector3, radius: float, height: f
 func _add_sphere(node_name: String, position: Vector3, node_scale: Vector3, material: Material, is_detail := false) -> MeshInstance3D:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = node_name
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.5
-	mesh.height = 1.0
-	mesh_instance.mesh = mesh
+	mesh_instance.mesh = _cached_sphere_mesh()
 	mesh_instance.position = position
 	mesh_instance.scale = node_scale
 	mesh_instance.material_override = material
@@ -956,15 +1992,47 @@ func _add_sphere(node_name: String, position: Vector3, node_scale: Vector3, mate
 func _add_box(node_name: String, position: Vector3, size: Vector3, material: Material, is_detail := false) -> MeshInstance3D:
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = node_name
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	mesh_instance.mesh = mesh
+	mesh_instance.mesh = _cached_box_mesh(size)
 	mesh_instance.position = position
 	mesh_instance.material_override = material
 	if is_detail:
 		mesh_instance.add_to_group(DETAIL_MESH_GROUP)
 	add_child(mesh_instance)
 	return mesh_instance
+
+
+func _cached_capsule_mesh(radius: float, height: float, radial_segments: int) -> CapsuleMesh:
+	var key := "%.3f:%.3f:%d" % [radius, height, radial_segments]
+	if _capsule_mesh_cache.has(key):
+		return _capsule_mesh_cache[key] as CapsuleMesh
+
+	var mesh := CapsuleMesh.new()
+	mesh.radius = radius
+	mesh.height = height
+	mesh.radial_segments = radial_segments
+	_capsule_mesh_cache[key] = mesh
+	return mesh
+
+
+func _cached_sphere_mesh() -> SphereMesh:
+	if _sphere_mesh != null:
+		return _sphere_mesh
+
+	_sphere_mesh = SphereMesh.new()
+	_sphere_mesh.radius = 0.5
+	_sphere_mesh.height = 1.0
+	return _sphere_mesh
+
+
+func _cached_box_mesh(size: Vector3) -> BoxMesh:
+	var key := "%.3f:%.3f:%.3f" % [size.x, size.y, size.z]
+	if _box_mesh_cache.has(key):
+		return _box_mesh_cache[key] as BoxMesh
+
+	var mesh := BoxMesh.new()
+	mesh.size = size
+	_box_mesh_cache[key] = mesh
+	return mesh
 
 
 func _remember_animation_node(node: Node3D) -> void:
@@ -974,7 +2042,25 @@ func _remember_animation_node(node: Node3D) -> void:
 	_base_scales.append(node.scale)
 
 
+func _update_soldier_visuals(delta: float, flat_speed: float) -> void:
+	if not _is_large_battle():
+		_animate_soldier(delta, flat_speed)
+		return
+
+	_visual_update_time = maxf(0.0, _visual_update_time - delta)
+	if _visual_update_time > 0.0:
+		return
+
+	_visual_update_time = LARGE_BATTLE_VISUAL_UPDATE_SECONDS + randf_range(0.0, 0.014)
+	_animate_soldier(LARGE_BATTLE_VISUAL_UPDATE_SECONDS, flat_speed)
+
+
 func _animate_soldier(delta: float, flat_speed: float) -> void:
+	if _uses_imported_visuals:
+		if _imported_visual != null and _imported_visual.has_method("update_combat_state"):
+			_imported_visual.call("update_combat_state", delta, flat_speed, _attack_time > 0.0, weapon_type, _is_moving_backward(flat_speed))
+		return
+
 	_animation_time += delta
 	_restore_animation_pose()
 
@@ -989,6 +2075,22 @@ func _animate_soldier(delta: float, flat_speed: float) -> void:
 		_animate_idle()
 
 
+func _is_moving_backward(flat_speed: float) -> bool:
+	if weapon_type != WEAPON_BOW or flat_speed <= 0.05:
+		return false
+
+	var flat_velocity := Vector3(velocity.x, 0.0, velocity.z)
+	if flat_velocity.length_squared() <= 0.0025:
+		return false
+
+	var forward := -global_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() <= 0.0001:
+		return false
+
+	return flat_velocity.normalized().dot(forward.normalized()) < -0.25
+
+
 func _restore_animation_pose() -> void:
 	for index in range(_animated_meshes.size()):
 		var mesh := _animated_meshes[index]
@@ -1000,7 +2102,7 @@ func _restore_animation_pose() -> void:
 
 
 func _animate_walk(flat_speed: float) -> void:
-	var weight := clampf(flat_speed / move_speed, 0.0, 1.0)
+	var weight := clampf(flat_speed / maxf(move_speed * _movement_efficiency(), 0.01), 0.0, 1.0)
 	var phase := _animation_time * 8.0
 	var bob := absf(sin(phase)) * 0.045 * weight
 	_body_mesh.position.y += bob
@@ -1015,44 +2117,51 @@ func _animate_sword_attack() -> void:
 	var attack_seconds := _attack_duration_seconds()
 	var elapsed := attack_seconds - _attack_time
 	var t := clampf(elapsed / attack_seconds, 0.0, 1.0)
-	
+
 	var windup := 0.0
 	var strike := 0.0
-	
-	if t < 0.35:
-		windup = sin((t / 0.35) * PI * 0.5)
-	elif t < 0.50:
-		var st = (t - 0.35) / 0.15
-		windup = 1.0 - st
-		strike = sin(st * PI * 0.5)
-	else:
-		var rt = (t - 0.50) / 0.50
-		strike = 1.0 - pow(rt, 1.5)
+	var recover := 0.0
 
-	var lunge_z := 0.25 * strike - 0.05 * windup
-	
+	if t < 0.32:
+		windup = smoothstep(0.0, 1.0, t / 0.32)
+	elif t < 0.50:
+		var st := (t - 0.32) / 0.18
+		windup = 1.0 - st
+		strike = smoothstep(0.0, 1.0, st)
+	else:
+		var rt := (t - 0.50) / 0.50
+		strike = 1.0 - smoothstep(0.0, 1.0, rt)
+		recover = smoothstep(0.0, 1.0, rt)
+
+	var lunge_z := 0.30 * strike - 0.08 * windup - 0.03 * recover
+	var shoulder_twist := 18.0 * windup - 26.0 * strike + 5.0 * recover
+
 	_body_mesh.position.z -= lunge_z
 	_head_mesh.position.z -= lunge_z * 0.8
 	_left_arm_mesh.position.z -= lunge_z
 	_right_arm_mesh.position.z -= lunge_z
 	_left_leg_mesh.position.z -= lunge_z
 	_right_leg_mesh.position.z -= lunge_z
-	
-	_sword_pivot.position.z -= lunge_z + 0.25 * strike - 0.1 * windup
-	_sword_pivot.position.y += 0.15 * strike + 0.05 * windup
-	
-	_body_mesh.rotation_degrees.x += 12.0 * strike - 6.0 * windup
-	_head_mesh.rotation_degrees.x += 6.0 * strike - 3.0 * windup
-	
-	_left_arm_mesh.rotation_degrees.x -= 25.0 * strike - 15.0 * windup
-	
-	_right_arm_mesh.rotation_degrees.x += 45.0 * windup - 95.0 * strike
-	_right_arm_mesh.rotation_degrees.y -= 35.0 * strike
-	_right_arm_mesh.rotation_degrees.z += 15.0 * windup - 15.0 * strike
-	
-	_sword_pivot.rotation_degrees.x += 60.0 * windup - 145.0 * strike
-	_sword_pivot.rotation_degrees.y += 25.0 * windup - 45.0 * strike
-	_sword_pivot.rotation_degrees.z += 25.0 * strike - 15.0 * windup
+
+	_sword_pivot.position.x += -0.16 * windup + 0.34 * strike
+	_sword_pivot.position.y += 0.20 * windup + 0.06 * strike - 0.08 * recover
+	_sword_pivot.position.z -= lunge_z + 0.14 * strike
+
+	_body_mesh.rotation_degrees.x += 10.0 * strike - 4.0 * windup
+	_body_mesh.rotation_degrees.y += shoulder_twist
+	_head_mesh.rotation_degrees.x += 5.0 * strike - 2.0 * windup
+	_head_mesh.rotation_degrees.y += shoulder_twist * 0.35
+
+	_left_arm_mesh.rotation_degrees.x -= 18.0 * windup + 20.0 * strike
+	_left_arm_mesh.rotation_degrees.y += 18.0 * strike
+
+	_right_arm_mesh.rotation_degrees.x += 62.0 * windup - 82.0 * strike + 18.0 * recover
+	_right_arm_mesh.rotation_degrees.y += 42.0 * windup - 72.0 * strike
+	_right_arm_mesh.rotation_degrees.z -= 38.0 * windup - 92.0 * strike + 22.0 * recover
+
+	_sword_pivot.rotation_degrees.x += 74.0 * windup - 118.0 * strike + 24.0 * recover
+	_sword_pivot.rotation_degrees.y += 52.0 * windup - 104.0 * strike + 18.0 * recover
+	_sword_pivot.rotation_degrees.z -= 64.0 * windup - 128.0 * strike + 32.0 * recover
 
 	_left_leg_mesh.rotation_degrees.x -= 30.0 * strike - 10.0 * windup
 	_right_leg_mesh.rotation_degrees.x += 20.0 * strike + 10.0 * windup
@@ -1099,22 +2208,32 @@ func _animate_idle() -> void:
 
 
 func _update_hit_flash() -> void:
-	for child in get_children():
-		var mesh := child as MeshInstance3D
-		if mesh != null and not child.is_in_group(DETAIL_MESH_GROUP):
-			mesh.material_override = _material_for_body_mesh(mesh)
+	var should_flash := _flash_time > 0.0
+	if should_flash == _flash_visible:
+		return
 
+	_flash_visible = should_flash
+	if _uses_imported_visuals:
+		if _imported_visual != null and _imported_visual.has_method("set_hit_flash"):
+			_imported_visual.call("set_hit_flash", _flash_visible)
+		return
 
-func _material_for_body_mesh(mesh: MeshInstance3D) -> Material:
-	if _flash_time > 0.0:
-		return _hit_material
-	if mesh == _body_mesh:
-		return _cloth_material
-	return _base_material
+	var cloth_material := _hit_material if _flash_visible else _cloth_material
+	var skin_material := _hit_material if _flash_visible else _base_material
+	if _body_mesh != null:
+		_body_mesh.material_override = cloth_material
+	for mesh in [_head_mesh, _left_arm_mesh, _right_arm_mesh, _left_leg_mesh, _right_leg_mesh]:
+		if mesh != null:
+			mesh.material_override = skin_material
 
 
 func _make_material(color: Color, roughness: float) -> StandardMaterial3D:
+	var key := "%.3f:%.3f:%.3f:%.3f:%.3f" % [color.r, color.g, color.b, color.a, roughness]
+	if _material_cache.has(key):
+		return _material_cache[key] as StandardMaterial3D
+
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color
 	material.roughness = roughness
+	_material_cache[key] = material
 	return material

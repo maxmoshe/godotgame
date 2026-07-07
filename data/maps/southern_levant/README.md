@@ -16,6 +16,7 @@ The Godot prototype projects the declared dataset bounding box into its existing
 - Ancient territory overlays are source data only for now; the Godot prototype does not render them because they make the campaign map too busy.
 - Settlement ownership is stored per feature as `owner_faction` in `human/settlements.geojson`, so villages and cities can change sides without repainting the map.
 - Settlement classification is explicit: use `settlement_class`, `location_class_label`, `site_role`, `fortification_level`, and `classification_confidence` instead of inferring type from the prose `kind`.
+- Painted map images can have their own `render_calibrations` entry in `map_manifest.json`. These visual control points align WGS84 data to a specific raster plate without changing the source coordinates.
 - Every region polygon carries gameplay metadata: `movement_cost`, `supply_value`, `water_access`, `agriculture_value`, `defense_bonus`, `settlement_density`, `road_difficulty`, and `seasonal_risk`.
 
 ## Source Notes

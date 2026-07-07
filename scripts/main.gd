@@ -6,6 +6,8 @@ const TIME_LABEL_MINUTE_STEP := 5
 const MOVEMENT_EPSILON := 0.05
 const MIN_RECRUIT_COUNT := 1
 const MAX_RECRUIT_COUNT := 3
+const TOWN_RECRUIT_BONUS := 2
+const CITY_RECRUIT_BONUS := 4
 const FOOD_BUY_AMOUNT := 4
 const FOOD_BUY_SILVER_COST := 5
 const FOOD_TAKE_AMOUNT := 7
@@ -14,7 +16,8 @@ const ZOOM_MIN := 0.18
 const ZOOM_MAX := 1.2
 const ZOOM_STEP := 0.08
 const ZOOM_LERP_SPEED := 8.0
-const LOCATION_TOOLTIP_SIZE := Vector2(286.0, 96.0)
+const LOCATION_TOOLTIP_SIZE := Vector2(326.0, 150.0)
+const LOCATION_TOOLTIP_COMPACT_HEIGHT := 96.0
 const LOCATION_TOOLTIP_OFFSET := Vector2(18.0, 18.0)
 const LOCATION_TOOLTIP_MARGIN := 10.0
 const LOCATION_FORTRESS_KEYWORDS := ["fortress", "stronghold", "watch", "outpost"]
@@ -27,6 +30,9 @@ const PLAYER_INTELLIGENCE_SPEED_BONUS_MAX := 0.30
 const PLAYER_CAMPAIGN_SPEED_MULTIPLIER := 0.5
 const HIDE_MINUTES := 3 * 60
 const AI_DEBUG_ADVANCE_HOURS := 6
+const PRESSURE_WARY_THRESHOLD := 25.0
+const PRESSURE_DANGEROUS_THRESHOLD := 55.0
+const PRESSURE_HUNTED_THRESHOLD := 80.0
 const CHEAT_COMPANIONS := [
 	{"name": "Joab", "health": 120, "max_health": 120},
 	{"name": "Abishai", "health": 115, "max_health": 115},
@@ -75,6 +81,7 @@ var _location_tooltip: Panel
 var _location_tooltip_name_label: Label
 var _location_tooltip_type_label: Label
 var _location_tooltip_faction_label: Label
+var _location_tooltip_lords_label: Label
 
 
 func _ready() -> void:
@@ -113,6 +120,7 @@ func _process(delta: float) -> void:
 	campaign_map.player_position = player.global_position
 	if _advance_time_if_player_moved(delta):
 		GameState.advance_travel_survival(delta)
+		GameState.save_party_data(party_panel.get_party_data())
 		campaign_map.queue_redraw()
 		var caught_target: Dictionary = campaign_map.update_lord_pressure(delta, player.global_position, _is_player_in_safe_place())
 		if not caught_target.is_empty() and not dialogue_panel.visible:
@@ -173,6 +181,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_mark_input_handled()
 		_save_campaign_state()
 		GameState.clear_combat_context()
+		_set_current_combat_map_context()
 		get_tree().change_scene_to_file("res://scenes/combat_test.tscn")
 		return
 
@@ -318,11 +327,42 @@ func _update_time_label() -> void:
 
 
 func _update_status_label() -> void:
-	var status := "%s\n%s" % [GameState.get_survival_text(), GameState.get_objective_text()]
+	var pressure_score := _get_ai_pressure_score()
+	var status := "%s\n%s\n%s" % [GameState.get_survival_text(), GameState.get_objective_text(), _pressure_status_text(pressure_score)]
 	if not GameState.last_campaign_notice.is_empty():
 		status += "\n%s" % GameState.last_campaign_notice
 	status_label.text = status
-	status_label.modulate = Color("#ffb09c") if GameState.food <= 2 or GameState.morale <= 25 else Color.WHITE
+	status_label.modulate = _status_label_color(pressure_score)
+
+
+func _get_ai_pressure_score() -> float:
+	if campaign_map == null:
+		return 0.0
+	var snapshot: Dictionary = campaign_map.get_ai_debug_snapshot()
+	var director := Dictionary(snapshot.get("director", {}))
+	return clampf(float(director.get("pressure_score", 0.0)), 0.0, 100.0)
+
+
+func _pressure_status_text(pressure_score: float) -> String:
+	return "Pursuit pressure: %s (%d)" % [_pressure_band_name(pressure_score), int(round(pressure_score))]
+
+
+func _pressure_band_name(pressure_score: float) -> String:
+	if pressure_score >= PRESSURE_HUNTED_THRESHOLD:
+		return "Hunted"
+	if pressure_score >= PRESSURE_DANGEROUS_THRESHOLD:
+		return "Dangerous"
+	if pressure_score >= PRESSURE_WARY_THRESHOLD:
+		return "Wary"
+	return "Quiet"
+
+
+func _status_label_color(pressure_score: float) -> Color:
+	if GameState.food <= 2 or GameState.morale <= 25 or pressure_score >= PRESSURE_HUNTED_THRESHOLD:
+		return Color("#ffb09c")
+	if pressure_score >= PRESSURE_DANGEROUS_THRESHOLD:
+		return Color("#ffe0a0")
+	return Color.WHITE
 
 
 func _update_player_campaign_speed() -> void:
@@ -352,17 +392,21 @@ func _build_location_tooltip() -> void:
 	_location_tooltip_name_label = _make_location_tooltip_label(14.0, 22, Color("#f4dfaa"))
 	_location_tooltip_type_label = _make_location_tooltip_label(46.0, 16, Color("#e0c88f"))
 	_location_tooltip_faction_label = _make_location_tooltip_label(68.0, 16, Color("#cdb989"))
+	_location_tooltip_lords_label = _make_location_tooltip_label(96.0, 15, Color("#f0dca8"), 42.0)
+	_location_tooltip_lords_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_location_tooltip_lords_label.clip_text = true
 	_location_tooltip.add_child(_location_tooltip_name_label)
 	_location_tooltip.add_child(_location_tooltip_type_label)
 	_location_tooltip.add_child(_location_tooltip_faction_label)
+	_location_tooltip.add_child(_location_tooltip_lords_label)
 
 
-func _make_location_tooltip_label(top: float, font_size: int, color: Color) -> Label:
+func _make_location_tooltip_label(top: float, font_size: int, color: Color, height: float = 24.0) -> Label:
 	var label := Label.new()
 	label.offset_left = 14.0
 	label.offset_top = top
 	label.offset_right = LOCATION_TOOLTIP_SIZE.x - 14.0
-	label.offset_bottom = top + 24.0
+	label.offset_bottom = top + height
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
 	return label
@@ -401,11 +445,18 @@ func _render_location_tooltip(location: Dictionary) -> void:
 	_location_tooltip_name_label.text = String(location.get("name", "Unknown location"))
 	_location_tooltip_type_label.text = "Type: %s" % _location_type_for(location)
 	_location_tooltip_faction_label.text = "Faction: %s" % _location_faction_for(location)
+	var lord_presence_text := _location_lord_presence_text(location)
+	_location_tooltip_lords_label.text = lord_presence_text
+	_location_tooltip_lords_label.visible = not lord_presence_text.is_empty()
+	_location_tooltip.size = Vector2(
+		LOCATION_TOOLTIP_SIZE.x,
+		LOCATION_TOOLTIP_SIZE.y if not lord_presence_text.is_empty() else LOCATION_TOOLTIP_COMPACT_HEIGHT
+	)
 
 
 func _position_location_tooltip(mouse_position: Vector2) -> void:
 	var viewport_size := get_viewport_rect().size
-	var tooltip_size := LOCATION_TOOLTIP_SIZE
+	var tooltip_size := _location_tooltip.size if _location_tooltip != null else LOCATION_TOOLTIP_SIZE
 	var tooltip_position := mouse_position + LOCATION_TOOLTIP_OFFSET
 
 	if tooltip_position.x + tooltip_size.x > viewport_size.x - LOCATION_TOOLTIP_MARGIN:
@@ -472,6 +523,26 @@ func _location_faction_for(location: Dictionary) -> String:
 	if faction.is_empty() or faction == "Neutral":
 		return "No controlling faction"
 	return faction
+
+
+func _location_lord_presence_text(location: Dictionary) -> String:
+	var grouped_lords := Array(location.get("contained_lords", location.get("grouped_lords", [])))
+	if grouped_lords.is_empty():
+		return ""
+	var pieces := PackedStringArray()
+	var total_men := 0
+	var visible_count := mini(grouped_lords.size(), 4)
+	for index in range(visible_count):
+		var lord := Dictionary(grouped_lords[index])
+		var party_size := int(lord.get("party_size", 0))
+		total_men += party_size
+		pieces.append("%s (%d)" % [String(lord.get("name", "Lord")), party_size])
+	for index in range(visible_count, grouped_lords.size()):
+		var lord := Dictionary(grouped_lords[index])
+		total_men += int(lord.get("party_size", 0))
+	if grouped_lords.size() > visible_count:
+		pieces.append("+%d more" % (grouped_lords.size() - visible_count))
+	return "Inside: %s | %d men" % [", ".join(pieces), total_men]
 
 
 func _should_hide_location_tooltip() -> bool:
@@ -553,6 +624,7 @@ func _build_cheat_panel() -> void:
 	_add_cheat_button(ai_debug, "Fake Sighting", Callable(self, "_cheat_fake_ai_sighting"))
 	_add_cheat_button(ai_debug, "Advance 6h", Callable(self, "_cheat_advance_ai_hours").bind(AI_DEBUG_ADVANCE_HOURS))
 	_add_cheat_button(ai_debug, "Break Trail", Callable(self, "_cheat_break_ai_trail"))
+	_add_cheat_button(ai_debug, "Seed Nemesis", Callable(self, "_cheat_seed_ai_nemesis"))
 
 	_cheat_notice_label = Label.new()
 	_cheat_notice_label.custom_minimum_size = Vector2(328.0, 118.0)
@@ -699,7 +771,7 @@ func _cheat_show_ai_snapshot() -> void:
 func _cheat_fake_ai_sighting() -> void:
 	campaign_map.force_player_sighting_for_debug(player.global_position)
 	campaign_map.update_overworld_ai(0.1, player.global_position, _is_player_in_safe_place())
-	_finish_cheat("AI sighting seeded at David's current position.\n%s" % _format_ai_debug_snapshot(campaign_map.get_ai_debug_snapshot()))
+	_finish_cheat("AI sighting seeded at the player band's current position.\n%s" % _format_ai_debug_snapshot(campaign_map.get_ai_debug_snapshot()))
 
 
 func _cheat_advance_ai_hours(hours: int) -> void:
@@ -723,6 +795,20 @@ func _cheat_break_ai_trail() -> void:
 	_finish_cheat("Trail broken for hostile lords.\n%s" % _format_ai_debug_snapshot(campaign_map.get_ai_debug_snapshot()))
 
 
+func _cheat_seed_ai_nemesis() -> void:
+	var history: Dictionary = campaign_map.seed_nemesis_for_debug(player.global_position)
+	campaign_map.update_overworld_ai(0.1, player.global_position, _is_player_in_safe_place())
+	if history.is_empty():
+		_finish_cheat("No hostile lord found for nemesis seed.")
+		return
+	_finish_cheat("Nemesis seeded for %s (%s %d).\n%s" % [
+		String(history.get("name", "a hostile lord")),
+		String(history.get("rank", "watchful")),
+		int(round(float(history.get("nemesis_score", 0.0)))),
+		_format_ai_debug_snapshot(campaign_map.get_ai_debug_snapshot())
+	])
+
+
 func _finish_cheat(message: String) -> void:
 	GameState.last_campaign_notice = "Dev cheat: %s" % message
 	_save_campaign_state()
@@ -734,10 +820,11 @@ func _finish_cheat(message: String) -> void:
 func _format_ai_debug_snapshot(snapshot: Dictionary) -> String:
 	var director := Dictionary(snapshot.get("director", {}))
 	var lines := PackedStringArray()
-	lines.append("AI minute %d | pressure %d | heat %d" % [
+	lines.append("AI minute %d | pressure %d | heat %d | roads %d" % [
 		int(snapshot.get("minute", GameState.get_game_total_minutes())),
 		int(round(float(director.get("pressure_score", 0.0)))),
-		GameState.heat
+		GameState.heat,
+		int(snapshot.get("road_graph_nodes", 0))
 	])
 	for raw_lord in Array(snapshot.get("lords", [])):
 		if not (raw_lord is Dictionary):
@@ -745,6 +832,9 @@ func _format_ai_debug_snapshot(snapshot: Dictionary) -> String:
 		var lord := Dictionary(raw_lord)
 		var task := Dictionary(lord.get("task", {}))
 		var knowledge := Dictionary(lord.get("knowledge", {}))
+		var memory_profile := Dictionary(lord.get("memory_profile", {}))
+		var legacy_profile := Dictionary(lord.get("legacy_profile", {}))
+		var strength_profile := Dictionary(lord.get("strength_profile", {}))
 		var name := String(lord.get("name", "Lord"))
 		var short_name := name.split(" ", false)[0]
 		var state := String(lord.get("state", ""))
@@ -753,8 +843,25 @@ func _format_ai_debug_snapshot(snapshot: Dictionary) -> String:
 		var fatigue := int(round(float(lord.get("fatigue", 0.0))))
 		var supplies := int(round(float(lord.get("supplies", 0.0))))
 		var waiting_at := String(lord.get("waiting_at", ""))
+		var coordination_role := String(lord.get("coordination_role", "routine"))
+		var memory_label := String(memory_profile.get("label", "normal"))
+		var legacy_label := String(legacy_profile.get("label", "unknown"))
+		var nemesis_score := int(round(float(legacy_profile.get("nemesis_score", 0.0))))
+		var solo_ratio := float(strength_profile.get("solo_ratio", 0.0))
+		var effective_ratio := float(strength_profile.get("effective_ratio", solo_ratio))
+		var group_ratio := float(strength_profile.get("group_ratio", effective_ratio))
 		var place_text := "" if waiting_at.is_empty() else " @%s" % waiting_at
-		lines.append("%s: %s/%s c%d f%d s%d%s" % [short_name, state, task_type, confidence, fatigue, supplies, place_text])
+		var layer_text := ""
+		if not coordination_role in ["", "routine", "local"]:
+			layer_text += " %s" % coordination_role
+		if not memory_label in ["", "normal"]:
+			layer_text += " %s" % memory_label
+		if not legacy_label in ["", "unknown"]:
+			layer_text += " %s%d" % [legacy_label, nemesis_score]
+		var strength_text := ""
+		if not strength_profile.is_empty():
+			strength_text = " odds%.2f/%.2f/%.2f" % [solo_ratio, effective_ratio, group_ratio]
+		lines.append("%s: %s/%s c%d f%d s%d%s%s%s" % [short_name, state, task_type, confidence, fatigue, supplies, place_text, strength_text, layer_text])
 	return "\n".join(lines)
 
 
@@ -941,9 +1048,20 @@ func _start_lord_combat() -> void:
 	if String(_dialogue_target.get("type", "")) != "lord":
 		return
 
+	GameState.save_party_data(party_panel.get_party_data())
+	var reinforcements: Array[Dictionary] = campaign_map.get_lord_combat_reinforcements(_dialogue_target)
+	var enemy_reinforcements: Array[Dictionary] = campaign_map.get_enemy_lord_combat_reinforcements(_dialogue_target)
 	_save_campaign_state()
-	GameState.start_lord_combat(_dialogue_target, GameState.get_party_data())
+	GameState.start_lord_combat(_dialogue_target, GameState.get_party_data(), reinforcements, enemy_reinforcements)
+	_set_current_combat_map_context()
 	get_tree().change_scene_to_file("res://scenes/combat_test.tscn")
+
+
+func _set_current_combat_map_context() -> void:
+	if campaign_map == null or not campaign_map.has_method("get_combat_map_context"):
+		GameState.clear_combat_map_context()
+		return
+	GameState.set_combat_map_context(campaign_map.get_combat_map_context(GameState.campaign_position))
 
 
 func _dialogue_pages_for(target: Dictionary) -> Array[String]:
@@ -990,8 +1108,35 @@ func _lord_dialogue_pages(target: Dictionary) -> Array[String]:
 	return [
 		"%s, %s, rides under %s colors with %d men in his company." % [name, title.to_lower(), faction, party_size],
 		dialogue,
-		"The meeting is brief. Messengers shift in their saddles, guards count your companions, and the road keeps pulling both parties onward."
+		"%s The road keeps pulling both parties onward." % _lord_reinforcement_dialogue_line(target)
 	]
+
+
+func _lord_reinforcement_dialogue_line(target: Dictionary) -> String:
+	var reinforcements: Array[Dictionary] = campaign_map.get_lord_combat_reinforcements(target)
+	var enemy_reinforcements: Array[Dictionary] = campaign_map.get_enemy_lord_combat_reinforcements(target)
+	if reinforcements.is_empty() and enemy_reinforcements.is_empty():
+		return "The meeting is brief. Messengers shift in their saddles and guards count your companions."
+
+	var lines := PackedStringArray()
+	var names: Array[String] = []
+	var men := 0
+	for raw_reinforcement in reinforcements:
+		var reinforcement := Dictionary(raw_reinforcement)
+		names.append(String(reinforcement.get("name", "an ally")))
+		men += int(reinforcement.get("party_size", 0))
+	if not names.is_empty():
+		lines.append("%s can see the same enemy and is close enough to join you with %d men." % [_format_name_list(names, 3), men])
+
+	names.clear()
+	men = 0
+	for raw_reinforcement in enemy_reinforcements:
+		var reinforcement := Dictionary(raw_reinforcement)
+		names.append(String(reinforcement.get("name", "another lord")))
+		men += int(reinforcement.get("party_size", 0))
+	if not names.is_empty():
+		lines.append("%s is close enough to answer his call with %d men." % [_format_name_list(names, 3), men])
+	return " ".join(lines)
 
 
 func _dialogue_title_for(target: Dictionary) -> String:
@@ -1082,20 +1227,23 @@ func _can_take_food_by_force() -> bool:
 
 func _build_rumor_text() -> String:
 	var lines := PackedStringArray()
+	var rumor_context := _rumor_context_for_dialogue_target()
 	var rumor_facts: Array[Dictionary] = campaign_map.get_rumor_facts(player.global_position)
 	if rumor_facts.is_empty():
-		lines.append("No one has seen a hostile banner close by.")
+		lines.append(_no_hostile_rumor_text(rumor_context))
 	else:
-		lines.append(_format_lord_rumor(rumor_facts[0]))
+		lines.append(_format_lord_rumor(rumor_facts[0], rumor_context))
+		if rumor_facts.size() > 1 and _should_add_second_rumor(rumor_facts[1], rumor_context):
+			lines.append(_format_secondary_lord_rumor(rumor_facts[1], rumor_context))
 
 	var highest_fact: Dictionary = rumor_facts[0] if not rumor_facts.is_empty() else {}
 	var highest_state := String(highest_fact.get("state", ""))
 	if highest_state == "pursuing":
 		lines.append("%s is not patrolling now. He is following your trail." % String(highest_fact.get("name", "A hostile lord")))
 	elif GameState.heat >= 25:
-		lines.append("Gatekeepers and traders answer sharper questions because your name is getting hotter.")
+		lines.append(_heat_rumor_text(rumor_context))
 	else:
-		lines.append("Most hostile riders still work from road routine and gate gossip.")
+		lines.append(_routine_rumor_text(rumor_context))
 
 	var recruit_names: Array[String] = campaign_map.get_recruitable_settlement_names()
 	if recruit_names.is_empty():
@@ -1112,29 +1260,136 @@ func _build_rumor_text() -> String:
 	return "\n".join(lines)
 
 
-func _format_lord_rumor(fact: Dictionary) -> String:
+func _format_lord_rumor(fact: Dictionary, rumor_context: Dictionary) -> String:
 	var lord_name := String(fact.get("name", "a hostile lord"))
 	var direction := String(fact.get("direction", "nearby"))
 	var distance := int(float(fact.get("distance", 0.0)) / 3.0)
 	var state := String(fact.get("state", "patrol"))
 	var confidence := float(fact.get("confidence", 0.0))
-	var report_strength := "thin gossip"
-	if confidence >= 70.0:
-		report_strength = "a hard report"
-	elif confidence >= 35.0:
-		report_strength = "usable rumor"
+	var report_strength := _report_strength_text(confidence, rumor_context)
+	var history_clause := _history_rumor_clause(fact)
 
 	match state:
 		"pursuing":
-			return "%s is hunting from %s, roughly %d map-paces to the %s." % [lord_name, report_strength, distance, direction]
+			return "%s is hunting from %s, roughly %d map-paces to the %s%s." % [lord_name, report_strength, distance, direction, history_clause]
 		"search":
-			return "%s is searching from %s, roughly %d map-paces to the %s." % [lord_name, report_strength, distance, direction]
+			return "%s is searching from %s, roughly %d map-paces to the %s%s." % [lord_name, report_strength, distance, direction, history_clause]
+		"retreat":
+			return "%s is pulling back from a stronger force, roughly %d map-paces to the %s%s." % [lord_name, distance, direction, history_clause]
 		"intercept":
-			return "%s has moved to block likely roads, roughly %d map-paces to the %s." % [lord_name, distance, direction]
+			return "%s has moved to block likely roads, roughly %d map-paces to the %s%s." % [lord_name, distance, direction, history_clause]
+		"muster":
+			return "%s is gathering support before risking a chase, roughly %d map-paces to the %s%s." % [lord_name, distance, direction, history_clause]
 		"recover", "holding":
-			return "%s is said to be near town, roughly %d map-paces to the %s." % [lord_name, distance, direction]
+			return "%s is said to be near town, roughly %d map-paces to the %s%s." % [lord_name, distance, direction, history_clause]
 		_:
-			return "%s is patrolling roughly %d map-paces to the %s." % [lord_name, distance, direction]
+			return "%s is patrolling roughly %d map-paces to the %s%s." % [lord_name, distance, direction, history_clause]
+
+
+func _history_rumor_clause(fact: Dictionary) -> String:
+	var rank := String(fact.get("history_rank", "unknown"))
+	var score := int(round(float(fact.get("nemesis_score", 0.0))))
+	match rank:
+		"nemesis":
+			return "; this has become personal (%d)" % score
+		"rival":
+			return "; old encounters sharpen his interest"
+		"haunted":
+			return "; he remembers past defeats too well"
+		"watchful":
+			return "; he has not forgotten you"
+		_:
+			return ""
+
+
+func _format_secondary_lord_rumor(fact: Dictionary, rumor_context: Dictionary) -> String:
+	var lord_name := String(fact.get("name", "another hostile lord"))
+	var direction := String(fact.get("direction", "nearby"))
+	var state := String(fact.get("state", "patrol"))
+	var confidence := float(fact.get("confidence", 0.0))
+	var context_type := String(rumor_context.get("type", "neutral"))
+	if context_type == "hostile" and confidence < 55.0:
+		return "Someone mentions %s, then remembers urgent business elsewhere." % lord_name
+	if state == "retreat":
+		return "%s is said to be backing away from trouble." % lord_name
+	if state == "muster":
+		return "%s seems to be calling for a stronger hand before moving." % lord_name
+	if state == "recover" or state == "holding":
+		return "%s seems tied near town for now, if that talk is clean." % lord_name
+	return "A second report puts %s somewhere to the %s." % [lord_name, direction]
+
+
+func _should_add_second_rumor(fact: Dictionary, rumor_context: Dictionary) -> bool:
+	var confidence := float(fact.get("confidence", 0.0))
+	var context_type := String(rumor_context.get("type", "neutral"))
+	if context_type == "friendly":
+		return confidence >= 12.0 or GameState.heat >= 20
+	if context_type == "hostile":
+		return confidence >= 45.0
+	return confidence >= 25.0 or GameState.heat >= 35
+
+
+func _rumor_context_for_dialogue_target() -> Dictionary:
+	var settlement_name := String(_dialogue_target.get("name", ""))
+	var owner := String(_dialogue_target.get("owner_faction", ""))
+	var kind := String(_dialogue_target.get("kind", "")).to_lower()
+	var context_type := "neutral"
+	var quality := 0.55
+	if owner == "Judah" or owner == "David's Band" or settlement_name in ["Bethlehem", "Hebron", "Keilah", "Ziklag", "En-gedi"]:
+		context_type = "friendly"
+		quality = 0.82
+	elif owner == "House of Saul" or owner == "Philistine Lords" or owner == "Edomite Retinue" or settlement_name in ["Gibeah", "Gath", "Ashkelon", "Gaza", "Nob"]:
+		context_type = "hostile"
+		quality = 0.38
+	elif kind.contains("fortress") or kind.contains("court") or kind.contains("port"):
+		quality = 0.62
+	return {
+		"type": context_type,
+		"quality": quality,
+		"settlement_name": settlement_name
+	}
+
+
+func _report_strength_text(confidence: float, rumor_context: Dictionary) -> String:
+	var quality := float(rumor_context.get("quality", 0.55))
+	var effective_confidence := confidence * lerpf(0.72, 1.18, quality)
+	if effective_confidence >= 70.0:
+		return "a hard report"
+	if effective_confidence >= 35.0:
+		return "usable rumor"
+	if String(rumor_context.get("type", "neutral")) == "hostile":
+		return "careful half-answers"
+	return "thin gossip"
+
+
+func _no_hostile_rumor_text(rumor_context: Dictionary) -> String:
+	match String(rumor_context.get("type", "neutral")):
+		"friendly":
+			return "No friendly ear has seen a hostile banner close by."
+		"hostile":
+			return "No one admits to seeing a hostile banner close by."
+		_:
+			return "No one has seen a hostile banner close by."
+
+
+func _heat_rumor_text(rumor_context: Dictionary) -> String:
+	match String(rumor_context.get("type", "neutral")):
+		"friendly":
+			return "Friends say gatekeepers are being pressed for your road and your numbers."
+		"hostile":
+			return "Gatekeepers answer sharply because your name has value here."
+		_:
+			return "Gatekeepers and traders answer sharper questions because your name is getting hotter."
+
+
+func _routine_rumor_text(rumor_context: Dictionary) -> String:
+	match String(rumor_context.get("type", "neutral")):
+		"friendly":
+			return "Friendly talk says most hostile riders still work from routine roads and gate gossip."
+		"hostile":
+			return "The answers are guarded. Routine patrols are easier to confirm than fresh orders."
+		_:
+			return "Most hostile riders still work from road routine and gate gossip."
 
 
 func _format_name_list(names: Array[String], limit: int) -> String:
@@ -1153,7 +1408,21 @@ func _roll_recruit_count_for(target: Dictionary) -> int:
 		return 0
 	if not GameState.can_recruit_from_settlement(String(target.get("name", ""))):
 		return 0
-	return randi_range(MIN_RECRUIT_COUNT, MAX_RECRUIT_COUNT)
+	var recruit_bonus := _settlement_recruit_bonus(target)
+	return randi_range(MIN_RECRUIT_COUNT + recruit_bonus, MAX_RECRUIT_COUNT + recruit_bonus)
+
+
+func _settlement_recruit_bonus(settlement: Dictionary) -> int:
+	var settlement_class := String(settlement.get("settlement_class", "")).to_lower()
+	var kind := String(settlement.get("kind", "")).to_lower()
+	var type_label := _location_type_for(settlement).to_lower()
+	var density := int(settlement.get("settlement_density", 0))
+
+	if settlement_class.contains("city") or kind.contains("city") or type_label.contains("city") or density >= 5:
+		return CITY_RECRUIT_BONUS
+	if settlement_class.contains("town") or kind.contains("town") or type_label.contains("town") or density >= 3:
+		return TOWN_RECRUIT_BONUS
+	return 0
 
 
 func _can_recruit_from_dialogue_town() -> bool:

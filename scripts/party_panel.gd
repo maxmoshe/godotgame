@@ -5,6 +5,7 @@ const PORTRAIT_SIZE := 64
 @export var player_name := "David"
 @export var player_health := 100
 @export var player_max_health := 100
+@export var player_sling_xp := 0
 @export var leader_intelligence := 50
 @export var generic_soldier_count := 0
 
@@ -21,6 +22,7 @@ func get_party_data() -> Dictionary:
 		"player_name": player_name,
 		"player_health": player_health,
 		"player_max_health": player_max_health,
+		"player_sling_xp": player_sling_xp,
 		"leader_intelligence": leader_intelligence,
 		"named_characters": _named_characters.duplicate(true),
 		"generic_soldier_count": generic_soldier_count
@@ -31,6 +33,7 @@ func load_party_data(data: Dictionary) -> void:
 	player_name = String(data.get("player_name", player_name))
 	player_health = int(data.get("player_health", player_health))
 	player_max_health = int(data.get("player_max_health", player_max_health))
+	player_sling_xp = maxi(0, int(data.get("player_sling_xp", player_sling_xp)))
 	leader_intelligence = int(data.get("leader_intelligence", leader_intelligence))
 	generic_soldier_count = int(data.get("generic_soldier_count", generic_soldier_count))
 	_named_characters.clear()
@@ -99,7 +102,7 @@ func _build_panel() -> void:
 	list.add_theme_constant_override("separation", 12)
 	add_child(list)
 
-	list.add_child(_make_named_row(player_name, "You", player_health, player_max_health, _make_portrait_texture(Color("#1f596f"), Color("#f1d28a"))))
+	list.add_child(_make_named_row(player_name, "You | Sling XP: %d" % player_sling_xp, player_health, player_max_health, _make_portrait_texture(Color("#1f596f"), Color("#f1d28a"))))
 
 	for character in _named_characters:
 		list.add_child(_make_named_row(
