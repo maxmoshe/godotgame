@@ -6,12 +6,26 @@ const BASE_MALE_PATH := "res://assets/characters/quaternius/universal_base_chara
 const OUTFIT_PEASANT_PATH := "res://assets/characters/quaternius/modular_character_outfits_fantasy/exports/gltf_godot_unreal/outfits/Male_Peasant.gltf"
 const OUTFIT_RANGER_PATH := "res://assets/characters/quaternius/modular_character_outfits_fantasy/exports/gltf_godot_unreal/outfits/Male_Ranger.gltf"
 const ANIMATION_SOURCE_PATH := "res://assets/characters/quaternius/universal_animation_library_2/unreal_godot/UAL2_Standard.glb"
+const STARTER_SWORD_PATH := "res://assets/characters/quaternius/weapons/Sword.fbx"
+const STARTER_SHIELD_PATH := "res://assets/characters/quaternius/weapons/Shield_Heater.fbx"
+const STARTER_BOW_PATH := "res://assets/characters/quaternius/weapons/Bow_Wooden.fbx"
+const STARTER_ARROW_PATH := "res://assets/characters/quaternius/weapons/Arrow.fbx"
 const MODEL_BASE_ROTATION_DEGREES := Vector3(0.0, 180.0, 0.0)
+const SWORD_ATTACHMENT_SCALE := 0.16
+const SHIELD_ATTACHMENT_SCALE := 0.18
+const BOW_ATTACHMENT_SCALE := 0.17
+const ARROW_ATTACHMENT_SCALE := 0.20
 const FACTION_FRIENDLY := "friendly"
 const FACTION_ENEMY := "enemy"
 const FRIENDLY_CLOTH_COLOR := Color("#2f6f8f")
 const ENEMY_CLOTH_COLOR := Color("#9b2f26")
 const FACTION_MARKER_COLOR_STRENGTH := 1.0
+const HEAD_HAIR_NONE := 0
+const HEAD_HAIR_BUZZED := 1
+const HEAD_HAIR_SIMPLE_PARTED := 2
+const HEAD_HAIR_LONG := 3
+const HEAD_HAIR_BEARD := 4
+const HAIRSTYLE_BASE_PATH := "res://assets/characters/quaternius/universal_base_characters/hairstyles/rigged_to_head_bone/gltf_godot_unreal/"
 const BASE_HEAD_BONES := {
 	"Head": true,
 	"neck_01": true,
@@ -182,9 +196,11 @@ var _current_state := ""
 var _state_lock_time := 0.0
 var _hit_overlay_material: StandardMaterial3D
 var _meshes: Array[MeshInstance3D] = []
+var _appearance_profile := {}
 
 static var _packed_scene_cache := {}
 static var _faction_marker_shader: Shader
+static var _appearance_material_cache := {}
 
 
 func _ready() -> void:
@@ -192,11 +208,12 @@ func _ready() -> void:
 		setup_visual(_faction, default_weapon_type, _has_shield)
 
 
-func setup_visual(new_faction: String, new_weapon_type: String, new_has_shield := false) -> bool:
+func setup_visual(new_faction: String, new_weapon_type: String, new_has_shield := false, new_appearance_profile := {}) -> bool:
 	_faction = new_faction
 	_weapon_type = new_weapon_type
 	_has_shield = new_has_shield
 	_clear_visual()
+	_appearance_profile = Dictionary(new_appearance_profile).duplicate(true)
 	var outfit := _load_gltf_scene(_outfit_path_for_weapon(_weapon_type)) as Node3D
 	if outfit == null:
 		_log("Could not load Quaternius outfit.")
@@ -220,6 +237,8 @@ func setup_visual(new_faction: String, new_weapon_type: String, new_has_shield :
 	_collect_meshes(_model_root)
 	_apply_facing_and_scale()
 	_apply_faction_colors()
+	_apply_head_appearance()
+	_attach_weapon_models()
 
 	if not _attach_animation_player():
 		_log("Could not attach UAL2 animation player.")
@@ -337,6 +356,171 @@ func _apply_faction_colors() -> void:
 			continue
 		mesh.material_override = _make_faction_marker_material(mesh, cloth_color)
 		return
+
+
+func _apply_head_appearance() -> void:
+	if _appearance_profile.is_empty():
+		return
+
+	var skin_color := _appearance_color("skin_color", Color("#e4b98f"))
+	var hair_color := _appearance_color("hair_color", Color("#3a2316"))
+	var skin_material := _make_appearance_material(skin_color, 0.88)
+	var hair_material := _make_appearance_material(hair_color, 0.96)
+
+	for mesh in _meshes:
+		if mesh == null:
+			continue
+		var lower_name := String(mesh.name).to_lower()
+		if _is_base_body_mesh_name(mesh.name) or lower_name.contains("superhero"):
+			mesh.material_override = skin_material
+		elif lower_name.contains("eyebrow") or lower_name.contains("brow"):
+			mesh.material_override = hair_material
+
+	var skeleton := _find_skeleton(_model_root)
+	if skeleton == null or skeleton.find_bone("Head") < 0:
+		return
+
+	if _weapon_type != WEAPON_BOW:
+		_merge_modular_hairstyle(skeleton, _hairstyle_path_for_profile(), hair_color)
+
+
+func _attach_weapon_models() -> void:
+	var skeleton := _find_skeleton(_model_root)
+	if skeleton == null:
+		_log("Could not find skeleton for Quaternius weapon attachments.")
+		return
+
+	if _weapon_type == WEAPON_BOW:
+		_attach_weapon_scene(
+			skeleton,
+			"hand_l",
+			STARTER_BOW_PATH,
+			"ImportedBow",
+			Vector3(0.0, 0.015, 0.0),
+			Vector3(0.0, 90.0, 0.0),
+			BOW_ATTACHMENT_SCALE
+		)
+		_attach_weapon_scene(
+			skeleton,
+			"hand_r",
+			STARTER_ARROW_PATH,
+			"ImportedArrow",
+			Vector3(0.0, 0.0, 0.14),
+			Vector3(90.0, 0.0, 0.0),
+			ARROW_ATTACHMENT_SCALE
+		)
+		return
+
+	_attach_weapon_scene(
+		skeleton,
+		"hand_r",
+		STARTER_SWORD_PATH,
+		"ImportedSword",
+		Vector3(-0.005, 0.06, 0.03),
+		Vector3(0.0, -87.0, 90.0),
+		SWORD_ATTACHMENT_SCALE
+	)
+	_attach_weapon_scene(
+		skeleton,
+		"lowerarm_l",
+		STARTER_SHIELD_PATH,
+		"ImportedShield",
+		Vector3(0.0, 0.08, 0.0),
+		Vector3.ZERO,
+		SHIELD_ATTACHMENT_SCALE
+	)
+
+
+func _attach_weapon_scene(
+	skeleton: Skeleton3D,
+	bone_name: String,
+	path: String,
+	node_name: String,
+	local_position: Vector3,
+	local_rotation_degrees: Vector3,
+	uniform_scale: float
+) -> Node3D:
+	if skeleton.find_bone(bone_name) < 0:
+		_log("Could not find bone %s for %s." % [bone_name, node_name])
+		return null
+
+	var weapon_root := _load_imported_scene(path) as Node3D
+	if weapon_root == null:
+		_log("Could not load weapon model: %s" % path)
+		return null
+
+	var attachment := BoneAttachment3D.new()
+	attachment.name = "%sAttachment" % node_name
+	attachment.bone_name = bone_name
+	skeleton.add_child(attachment)
+
+	weapon_root.name = node_name
+	weapon_root.position = local_position
+	weapon_root.rotation_degrees = local_rotation_degrees
+	weapon_root.scale = Vector3.ONE * uniform_scale
+	attachment.add_child(weapon_root)
+	_collect_meshes(weapon_root)
+	return weapon_root
+
+
+func _hairstyle_path_for_profile() -> String:
+	match int(_appearance_profile.get("hair_style", HEAD_HAIR_SIMPLE_PARTED)):
+		HEAD_HAIR_BUZZED:
+			return HAIRSTYLE_BASE_PATH + "Hair_Buzzed.gltf"
+		HEAD_HAIR_LONG:
+			return HAIRSTYLE_BASE_PATH + "Hair_Long.gltf"
+		HEAD_HAIR_BEARD:
+			return HAIRSTYLE_BASE_PATH + "Hair_Beard.gltf"
+		_:
+			return HAIRSTYLE_BASE_PATH + "Hair_SimpleParted.gltf"
+
+
+func _merge_modular_hairstyle(target_skeleton: Skeleton3D, path: String, hair_color: Color) -> void:
+	if path.is_empty() or target_skeleton == null:
+		return
+
+	var hair_root := _load_gltf_scene(path)
+	if hair_root == null:
+		_log("Could not load modular hairstyle: %s" % path)
+		return
+
+	var hair_skeleton := _find_skeleton(hair_root)
+	if hair_skeleton == null:
+		hair_root.free()
+		_log("Could not find hairstyle skeleton: %s" % path)
+		return
+
+	for child in hair_skeleton.get_children():
+		var mesh := child as MeshInstance3D
+		if mesh == null:
+			continue
+		hair_skeleton.remove_child(mesh)
+		mesh.owner = null
+		target_skeleton.add_child(mesh)
+		mesh.set("skeleton", NodePath(".."))
+		mesh.material_override = _make_faction_marker_material(mesh, hair_color)
+		_meshes.append(mesh)
+
+	hair_root.free()
+
+
+func _appearance_color(key: String, fallback: Color) -> Color:
+	var value = _appearance_profile.get(key, fallback)
+	if value is Color:
+		return value
+	return fallback
+
+
+func _make_appearance_material(color: Color, roughness: float) -> StandardMaterial3D:
+	var key := "%.3f:%.3f:%.3f:%.3f:%.3f" % [color.r, color.g, color.b, color.a, roughness]
+	if _appearance_material_cache.has(key):
+		return _appearance_material_cache[key] as StandardMaterial3D
+
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = roughness
+	_appearance_material_cache[key] = material
+	return material
 
 
 func _find_faction_marker_meshes() -> Array[MeshInstance3D]:
@@ -803,6 +987,22 @@ static func _load_gltf_scene(path: String) -> Node:
 		return instance
 
 	return root
+
+
+static func _load_imported_scene(path: String) -> Node:
+	if not FileAccess.file_exists(path):
+		return null
+	if _packed_scene_cache.has(path):
+		var cached_scene := _packed_scene_cache[path] as PackedScene
+		if cached_scene != null:
+			return cached_scene.instantiate()
+
+	var packed_scene := ResourceLoader.load(path) as PackedScene
+	if packed_scene == null:
+		return null
+
+	_packed_scene_cache[path] = packed_scene
+	return packed_scene.instantiate()
 
 
 func _make_hit_overlay_material() -> StandardMaterial3D:

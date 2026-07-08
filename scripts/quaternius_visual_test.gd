@@ -7,7 +7,7 @@ func _ready() -> void:
 	_add_light()
 	_add_camera()
 	_add_ground()
-	_add_visual(Vector3(-1.7, 0.0, 0.0), "sword", false)
+	_add_visual(Vector3(-1.7, 0.0, 0.0), "sword", true)
 	var archer := _add_visual(Vector3(0.0, 0.0, 0.0), "bow", false)
 	if archer != null and archer.has_method("play_attack"):
 		archer.call("play_attack", "bow")

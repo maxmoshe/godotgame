@@ -127,6 +127,36 @@ const BODY_HIT_STAGGER_SECONDS := 0.50
 const HEADSHOT_STAGGER_SECONDS := 0.90
 const BODY_HIT_FLASH_SECONDS := 0.22
 const HEADSHOT_HIT_FLASH_SECONDS := 0.38
+const HEAD_HAIR_NONE := 0
+const HEAD_HAIR_BUZZED := 1
+const HEAD_HAIR_SIMPLE_PARTED := 2
+const HEAD_HAIR_LONG := 3
+const HEAD_HAIR_BEARD := 4
+const HEAD_AGE_YOUNG := 0
+const HEAD_AGE_ADULT := 1
+const HEAD_AGE_OLDER := 2
+const HEAD_SKIN_COLORS := [
+	Color("#f1c9a6"),
+	Color("#e4b98f"),
+	Color("#d9a678"),
+	Color("#c99069"),
+	Color("#efbea1"),
+	Color("#d6ad88"),
+]
+const HEAD_HAIR_COLORS := [
+	Color("#1f150f"),
+	Color("#3a2316"),
+	Color("#5a3824"),
+	Color("#7d4a26"),
+	Color("#a75e2a"),
+	Color("#c7924c"),
+	Color("#d6b36a"),
+]
+const HEAD_GRAY_HAIR_COLORS := [
+	Color("#9a9187"),
+	Color("#bcb4aa"),
+	Color("#d7d1c7"),
+]
 const DETAIL_MESH_GROUP := "soldier_detail_mesh"
 const AI_ACTION_IDLE := "Idle"
 const AI_ACTION_ADVANCE := "Advance"
@@ -235,6 +265,8 @@ var _cached_bow_risk := 0.0
 var _cached_bow_risk_target: Node3D
 var _left_battlefield := false
 var _uses_imported_visuals := false
+var _appearance_profile := {}
+var _hair_material: StandardMaterial3D
 
 static var _capsule_mesh_cache := {}
 static var _sphere_mesh: SphereMesh
@@ -269,10 +301,12 @@ func _ready() -> void:
 	_label_update_time = randf_range(0.0, LABEL_UPDATE_SECONDS)
 	_visual_update_time = randf_range(0.0, LARGE_BATTLE_VISUAL_UPDATE_SECONDS)
 	_separation_refresh_time = randf_range(0.0, _separation_refresh_seconds())
-	_base_material = _make_material(Color("#9b6b45"), 0.88)
+	_appearance_profile = _make_head_appearance_profile()
+	_base_material = _make_material(_profile_color("skin_color", Color("#e4b98f")), 0.88)
 	_hit_material = _make_material(Color("#8d251f"), 0.72)
 	_metal_material = _make_material(Color("#aeb7b5"), 0.35)
 	_leather_material = _make_material(Color("#4e2e1d"), 0.92)
+	_hair_material = _make_material(_profile_color("hair_color", Color("#3a2316")), 0.96)
 	_cloth_material = _make_material(_cloth_color(), 0.94)
 	_build_body()
 	_build_equipment()
@@ -1748,6 +1782,90 @@ func _is_headshot(hit_position: Vector3) -> bool:
 	return local_hit.y >= HEADSHOT_MIN_Y and flat_offset.length() <= HEADSHOT_FLAT_RADIUS
 
 
+func _make_head_appearance_profile() -> Dictionary:
+	var age_tier := HEAD_AGE_ADULT
+	var age_roll := randf()
+	if age_roll < 0.16:
+		age_tier = HEAD_AGE_YOUNG
+	elif age_roll > 0.78:
+		age_tier = HEAD_AGE_OLDER
+
+	var hair_color := _random_profile_color(HEAD_HAIR_COLORS)
+	if age_tier == HEAD_AGE_OLDER and randf() < 0.78:
+		hair_color = _random_profile_color(HEAD_GRAY_HAIR_COLORS)
+
+	var hair_styles := [
+		HEAD_HAIR_BUZZED,
+		HEAD_HAIR_SIMPLE_PARTED,
+		HEAD_HAIR_LONG,
+		HEAD_HAIR_BEARD,
+	]
+	var hair_style: int = hair_styles[int(randi() % hair_styles.size())]
+	if age_tier == HEAD_AGE_YOUNG and hair_style == HEAD_HAIR_BEARD:
+		hair_style = HEAD_HAIR_SIMPLE_PARTED
+	elif age_tier == HEAD_AGE_OLDER and randf() < 0.45:
+		hair_style = HEAD_HAIR_BEARD if randf() < 0.65 else HEAD_HAIR_BUZZED
+
+	return {
+		"age_tier": age_tier,
+		"skin_color": _random_profile_color(HEAD_SKIN_COLORS),
+		"hair_color": hair_color,
+		"hair_style": hair_style,
+		"wears_helmet": weapon_type != WEAPON_BOW and randf() < 0.36,
+		"head_width_scale": randf_range(0.94, 1.08),
+		"head_height_scale": randf_range(0.94, 1.07),
+		"head_depth_scale": randf_range(0.95, 1.08),
+	}
+
+
+func _random_profile_color(colors: Array) -> Color:
+	if colors.is_empty():
+		return Color.WHITE
+	var color: Color = colors[int(randi() % colors.size())]
+	return color
+
+
+func _profile_color(key: String, fallback: Color) -> Color:
+	var value = _appearance_profile.get(key, fallback)
+	if value is Color:
+		return value
+	return fallback
+
+
+func _fallback_head_scale() -> Vector3:
+	return Vector3(
+		0.4 * float(_appearance_profile.get("head_width_scale", 1.0)),
+		0.37 * float(_appearance_profile.get("head_height_scale", 1.0)),
+		0.4 * float(_appearance_profile.get("head_depth_scale", 1.0))
+	)
+
+
+func _add_fallback_head_variation() -> void:
+	if _head_mesh == null:
+		return
+
+	if not bool(_appearance_profile.get("wears_helmet", false)):
+		match int(_appearance_profile.get("hair_style", HEAD_HAIR_SIMPLE_PARTED)):
+			HEAD_HAIR_BUZZED:
+				_add_head_child_sphere("CroppedHair", Vector3(0.0, 0.32, -0.02), Vector3(1.03, 0.24, 0.92), _hair_material)
+			HEAD_HAIR_SIMPLE_PARTED, HEAD_HAIR_BEARD:
+				_add_head_child_sphere("ShortHair", Vector3(0.0, 0.26, -0.04), Vector3(1.08, 0.36, 0.98), _hair_material)
+			HEAD_HAIR_LONG:
+				_add_head_child_sphere("LongHair", Vector3(0.0, 0.18, 0.08), Vector3(1.10, 0.42, 0.98), _hair_material)
+
+
+func _add_head_child_sphere(node_name: String, position: Vector3, node_scale: Vector3, material: Material) -> MeshInstance3D:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = node_name
+	mesh_instance.mesh = _cached_sphere_mesh()
+	mesh_instance.position = position
+	mesh_instance.scale = node_scale
+	mesh_instance.material_override = material
+	mesh_instance.add_to_group(DETAIL_MESH_GROUP)
+	_head_mesh.add_child(mesh_instance)
+	return mesh_instance
+
+
 func _build_body() -> void:
 	var body_shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
@@ -1769,9 +1887,11 @@ func _build_body() -> void:
 		return
 
 	_body_mesh = _add_capsule("Body", Vector3(0.0, 0.86, 0.0), 0.29, 1.05, _cloth_material)
-	_head_mesh = _add_sphere("Head", HEAD_CENTER, Vector3(0.4, 0.37, 0.4), _base_material)
-	_add_capsule("Helmet", Vector3(0.0, 1.75, 0.0), 0.42, 0.24, _metal_material, true)
-	_add_box("NoseGuard", Vector3(0.0, 1.6, -0.36), Vector3(0.045, 0.25, 0.035), _metal_material, true)
+	_head_mesh = _add_sphere("Head", HEAD_CENTER, _fallback_head_scale(), _base_material)
+	_add_fallback_head_variation()
+	if bool(_appearance_profile.get("wears_helmet", false)):
+		_add_capsule("Helmet", Vector3(0.0, 1.75, 0.0), 0.42, 0.24, _metal_material, true)
+		_add_box("NoseGuard", Vector3(0.0, 1.6, -0.36), Vector3(0.045, 0.25, 0.035), _metal_material, true)
 	_add_box("Belt", Vector3(0.0, 0.86, -0.01), Vector3(0.39, 0.08, 0.33), _leather_material, true)
 
 	_left_arm_mesh = _add_limb("LeftArm", Vector3(-0.35, 1.04, -0.03), -8.0)
@@ -1793,7 +1913,7 @@ func _try_build_imported_visual() -> bool:
 		visual.free()
 		return false
 
-	var loaded := bool(visual.call("setup_visual", faction, weapon_type, has_shield))
+	var loaded := bool(visual.call("setup_visual", faction, weapon_type, has_shield, _appearance_profile))
 	if not loaded:
 		visual.free()
 		return false
