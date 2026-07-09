@@ -15,6 +15,65 @@ const LORD_DEFEAT_RECOVERY_MINUTES := 2 * 24 * 60
 const LORD_HISTORY_LOG_LIMIT := 12
 const LORD_RIVAL_THRESHOLD := 35.0
 const LORD_NEMESIS_THRESHOLD := 70.0
+const MAIN_STORY_QUESTS := [
+	{
+		"id": "shepherds_teeth",
+		"title": "Shepherd's Teeth",
+		"objective": "Defend Jesse's flock outside Bethlehem.",
+		"target_names": ["Bethlehem"]
+	},
+	{
+		"id": "bread_to_brothers",
+		"title": "Bread to the Camp",
+		"objective": "Carry food from Bethlehem to the Israelite camp at Socoh.",
+		"target_names": ["Socoh"]
+	},
+	{
+		"id": "court_music_bad_spear",
+		"title": "Court Music, Bad Spear",
+		"objective": "Go to Saul's court at Gibeah and survive the king's favor turning sharp.",
+		"target_names": ["Gibeah"]
+	},
+	{
+		"id": "nob_and_the_bread",
+		"title": "Nob and the Bread",
+		"objective": "Seek priestly help at Nob before Saul's men close the roads.",
+		"target_names": ["Nob"]
+	},
+	{
+		"id": "cave_of_adullam",
+		"title": "Cave of Adullam",
+		"objective": "Gather the distressed, indebted, and bitter-souled into a fighting band.",
+		"target_names": ["Adullam"]
+	},
+	{
+		"id": "keilah_border_fire",
+		"title": "Keilah Border Fire",
+		"objective": "Answer Keilah before raiders strip its threshing floors.",
+		"target_names": ["Keilah"]
+	},
+	{
+		"id": "engedi_mercy",
+		"title": "En-gedi Mercy",
+		"objective": "Lose Saul in the wilderness and choose restraint when you could strike.",
+		"target_names": ["En-gedi"]
+	},
+	{
+		"id": "ziklag_refuge",
+		"title": "Ziklag Refuge",
+		"objective": "Reach Ziklag with enough men to stop being only a fugitive.",
+		"target_names": ["Ziklag"]
+	}
+]
+const OPTIONAL_STORY_QUESTS := [
+	{
+		"id": "champion_in_the_valley",
+		"title": "Champion in the Valley",
+		"objective": "Optional: face the Philistine champion near Azekah and the Valley of Elah.",
+		"target_names": ["Azekah"],
+		"unlock_after": "bread_to_brothers"
+	}
+]
 const LORD_LOOT_TABLE := [
 	{"id": "sling_stones", "min": 6, "max": 18, "weight": 36},
 	{"id": "barley_bread", "min": 1, "max": 4, "weight": 28},
@@ -30,6 +89,7 @@ var silver := STARTING_SILVER
 var morale := STARTING_MORALE
 var heat := STARTING_HEAT
 var objective_complete := false
+var completed_story_quests: Dictionary = {}
 var player_inventory_slots: Array = []
 var market_inventory_slots: Array = []
 var map_state: Dictionary = {}
@@ -132,10 +192,85 @@ func get_party_men_count() -> int:
 
 
 func get_objective_text() -> String:
+	var active_story := get_active_main_story_quest()
 	var count := get_party_men_count()
-	if objective_complete:
-		return "Ziklag reached with %d men" % count
-	return "Reach Ziklag with %d men: %d/%d" % [OBJECTIVE_TARGET_MEN, count, OBJECTIVE_TARGET_MEN]
+	if active_story.is_empty():
+		return "Chapter complete: Ziklag reached with %d men" % count
+	var title := String(active_story.get("title", "Story"))
+	var objective := String(active_story.get("objective", "Follow the road."))
+	if String(active_story.get("id", "")) == "ziklag_refuge" and count < OBJECTIVE_TARGET_MEN:
+		objective = "Gather %d men, then reach Ziklag: %d/%d" % [OBJECTIVE_TARGET_MEN, count, OBJECTIVE_TARGET_MEN]
+	return "%s: %s\nBand: %d/%d men" % [title, objective, count, OBJECTIVE_TARGET_MEN]
+
+
+func is_story_quest_complete(quest_id: String) -> bool:
+	return bool(completed_story_quests.get(quest_id, false))
+
+
+func mark_story_quest_complete(quest_id: String) -> void:
+	if quest_id.is_empty():
+		return
+	completed_story_quests[quest_id] = true
+
+
+func get_active_main_story_quest() -> Dictionary:
+	for quest in MAIN_STORY_QUESTS:
+		var quest_dict := Dictionary(quest)
+		if not is_story_quest_complete(String(quest_dict.get("id", ""))):
+			return quest_dict.duplicate(true)
+	return {}
+
+
+func get_available_optional_story_quests() -> Array[Dictionary]:
+	var quests: Array[Dictionary] = []
+	for quest in OPTIONAL_STORY_QUESTS:
+		var quest_dict := Dictionary(quest)
+		var quest_id := String(quest_dict.get("id", ""))
+		if is_story_quest_complete(quest_id):
+			continue
+		var unlock_after := String(quest_dict.get("unlock_after", ""))
+		if not unlock_after.is_empty() and not is_story_quest_complete(unlock_after):
+			continue
+		quests.append(quest_dict.duplicate(true))
+	return quests
+
+
+func get_active_story_location_names() -> Array[String]:
+	var names: Array[String] = []
+	var active_main := get_active_main_story_quest()
+	if not active_main.is_empty():
+		_append_story_target_names(names, active_main)
+	for quest in get_available_optional_story_quests():
+		_append_story_target_names(names, quest)
+	return names
+
+
+func is_active_story_location(location_name: String) -> bool:
+	return get_active_story_location_names().has(location_name)
+
+
+func is_optional_story_location(location_name: String) -> bool:
+	for quest in get_available_optional_story_quests():
+		if Array(quest.get("target_names", [])).has(location_name):
+			return true
+	return false
+
+
+func story_title_for_location(location_name: String) -> String:
+	var active_main := get_active_main_story_quest()
+	if Array(active_main.get("target_names", [])).has(location_name):
+		return String(active_main.get("title", "Story"))
+	for quest in get_available_optional_story_quests():
+		if Array(quest.get("target_names", [])).has(location_name):
+			return String(quest.get("title", "Story"))
+	return ""
+
+
+func _append_story_target_names(names: Array[String], quest: Dictionary) -> void:
+	for raw_name in Array(quest.get("target_names", [])):
+		var name := String(raw_name)
+		if not name.is_empty() and not names.has(name):
+			names.append(name)
 
 
 func get_survival_text() -> String:

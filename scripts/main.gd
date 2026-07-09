@@ -16,10 +16,16 @@ const ZOOM_MIN := 0.18
 const ZOOM_MAX := 1.2
 const ZOOM_STEP := 0.08
 const ZOOM_LERP_SPEED := 8.0
+const CAMERA_PAN_SCREEN_SPEED := 540.0
+const CAMERA_RECENTER_LERP_SPEED := 7.0
+const CAMERA_RECENTER_EPSILON := 0.5
 const LOCATION_TOOLTIP_SIZE := Vector2(326.0, 150.0)
 const LOCATION_TOOLTIP_COMPACT_HEIGHT := 96.0
 const LOCATION_TOOLTIP_OFFSET := Vector2(18.0, 18.0)
 const LOCATION_TOOLTIP_MARGIN := 10.0
+const QUEST_ARROW_MARGIN := 46.0
+const QUEST_ARROW_LABEL_OFFSET := Vector2(18.0, -12.0)
+const QUEST_ARROW_LABEL_SIZE := Vector2(190.0, 28.0)
 const LOCATION_FORTRESS_KEYWORDS := ["fortress", "stronghold", "watch", "outpost"]
 const LOCATION_VILLAGE_KEYWORDS := ["village", "camp", "well", "spring", "oasis", "shrine", "mine", "copper", "clan", "house"]
 const LOCATION_CITY_KEYWORDS := ["city", "port", "capital", "court", "sanctuary"]
@@ -82,11 +88,15 @@ var _location_tooltip_name_label: Label
 var _location_tooltip_type_label: Label
 var _location_tooltip_faction_label: Label
 var _location_tooltip_lords_label: Label
+var _camera_following_player := true
+var _quest_arrow: Polygon2D
+var _quest_arrow_label: Label
 
 
 func _ready() -> void:
 	player.world_bounds = campaign_map.get_playable_rect()
 	player.set("movement_constraint", Callable(campaign_map, "constrain_land_position"))
+	player.set("keyboard_movement_enabled", false)
 	_restore_campaign_state()
 	_update_player_campaign_speed()
 	_last_player_position = player.global_position
@@ -96,9 +106,11 @@ func _ready() -> void:
 	inventory_panel.visible = false
 	market_panel.visible = false
 	party_panel.visible = false
-	_build_cheat_panel()
+	if _dev_cheats_enabled():
+		_build_cheat_panel()
 	_build_loot_controls()
 	_build_location_tooltip()
+	_build_quest_arrow()
 	dialogue_continue_button.pressed.connect(_advance_dialogue)
 	dialogue_recruit_button.pressed.connect(_recruit_soldiers)
 	dialogue_attack_button.pressed.connect(_start_lord_combat)
@@ -116,6 +128,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_smooth_zoom(delta)
+	_update_camera_pan(delta)
 	_update_player_campaign_speed()
 	campaign_map.player_position = player.global_position
 	if _advance_time_if_player_moved(delta):
@@ -131,11 +144,8 @@ func _process(delta: float) -> void:
 	_update_status_label()
 	GameState.campaign_position = player.global_position
 
-	if _is_manual_movement_pressed() and not _pending_encounter.is_empty():
-		_pending_encounter = {}
-
 	if _should_follow_mouse_pointer():
-		player.travel_to(get_global_mouse_position())
+		_travel_player_to(get_global_mouse_position())
 
 	if not _pending_encounter.is_empty() and not dialogue_panel.visible:
 		if not _refresh_pending_lord_encounter():
@@ -147,11 +157,12 @@ func _process(delta: float) -> void:
 
 	_update_location_label(false)
 	_update_location_tooltip()
+	_update_quest_arrow()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	var key_event := event as InputEventKey
-	if key_event != null and key_event.pressed and not key_event.echo and key_event.keycode == KEY_H:
+	if key_event != null and key_event.pressed and not key_event.echo and key_event.keycode == KEY_H and _dev_cheats_enabled():
 		_toggle_cheat_panel()
 		_mark_input_handled()
 		return
@@ -212,15 +223,20 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	var world_position := get_global_mouse_position()
+	if mouse_event.ctrl_pressed and _dev_cheats_enabled():
+		_cheat_teleport_player(world_position)
+		_mark_input_handled()
+		return
+
 	var target: Dictionary = campaign_map.get_click_target(world_position)
 
 	if target.is_empty():
 		_pending_encounter = {}
-		player.travel_to(world_position)
+		_travel_player_to(world_position)
 		return
 
 	_pending_encounter = target
-	player.travel_to(target["pos"])
+	_travel_player_to(target["pos"])
 
 
 func _refresh_pending_lord_encounter() -> bool:
@@ -235,7 +251,7 @@ func _refresh_pending_lord_encounter() -> bool:
 		return false
 
 	_pending_encounter = live_target
-	player.travel_to(live_target["pos"])
+	_travel_player_to(live_target["pos"])
 	return true
 
 
@@ -558,6 +574,109 @@ func _hide_location_tooltip() -> void:
 		_location_tooltip.visible = false
 
 
+func _build_quest_arrow() -> void:
+	_quest_arrow = Polygon2D.new()
+	_quest_arrow.name = "QuestDirectionArrow"
+	_quest_arrow.visible = false
+	_quest_arrow.polygon = PackedVector2Array([
+		Vector2(24.0, 0.0),
+		Vector2(-12.0, -13.0),
+		Vector2(-4.0, 0.0),
+		Vector2(-12.0, 13.0)
+	])
+	_quest_arrow.color = Color("#ffd36f")
+	hud.add_child(_quest_arrow)
+
+	_quest_arrow_label = Label.new()
+	_quest_arrow_label.name = "QuestDirectionLabel"
+	_quest_arrow_label.visible = false
+	_quest_arrow_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_quest_arrow_label.custom_minimum_size = QUEST_ARROW_LABEL_SIZE
+	_quest_arrow_label.size = QUEST_ARROW_LABEL_SIZE
+	_quest_arrow_label.add_theme_font_size_override("font_size", 15)
+	_quest_arrow_label.add_theme_color_override("font_color", Color("#ffe7a2"))
+	_quest_arrow_label.add_theme_color_override("font_shadow_color", Color(0.05, 0.03, 0.015, 0.9))
+	_quest_arrow_label.add_theme_constant_override("shadow_offset_x", 2)
+	_quest_arrow_label.add_theme_constant_override("shadow_offset_y", 2)
+	hud.add_child(_quest_arrow_label)
+
+
+func _update_quest_arrow() -> void:
+	if _quest_arrow == null or _quest_arrow_label == null:
+		return
+	if dialogue_panel.visible or _loot_panel_active:
+		_hide_quest_arrow()
+		return
+
+	var story_target: Dictionary = campaign_map.get_primary_story_target()
+	if story_target.is_empty():
+		_hide_quest_arrow()
+		return
+
+	var viewport_size := get_viewport_rect().size
+	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
+		_hide_quest_arrow()
+		return
+
+	var target_screen_position := _world_to_screen_position(Vector2(story_target.get("pos", Vector2.ZERO)), viewport_size)
+	var visible_rect := Rect2(
+		Vector2(QUEST_ARROW_MARGIN, QUEST_ARROW_MARGIN),
+		viewport_size - Vector2(QUEST_ARROW_MARGIN * 2.0, QUEST_ARROW_MARGIN * 2.0)
+	)
+	if visible_rect.has_point(target_screen_position):
+		_hide_quest_arrow()
+		return
+
+	var screen_center := viewport_size * 0.5
+	var direction := target_screen_position - screen_center
+	if direction.length() <= 0.01:
+		_hide_quest_arrow()
+		return
+
+	var arrow_position := Vector2(
+		clampf(target_screen_position.x, visible_rect.position.x, visible_rect.end.x),
+		clampf(target_screen_position.y, visible_rect.position.y, visible_rect.end.y)
+	)
+	_quest_arrow.position = arrow_position
+	_quest_arrow.rotation = direction.angle()
+	_quest_arrow.visible = true
+
+	_quest_arrow_label.text = String(story_target.get("title", "Quest"))
+	_quest_arrow_label.position = _quest_arrow_label_position(arrow_position, direction.normalized(), viewport_size)
+	_quest_arrow_label.visible = true
+
+
+func _hide_quest_arrow() -> void:
+	if _quest_arrow != null:
+		_quest_arrow.visible = false
+	if _quest_arrow_label != null:
+		_quest_arrow_label.visible = false
+
+
+func _world_to_screen_position(world_position: Vector2, viewport_size: Vector2) -> Vector2:
+	if camera == null:
+		return world_position
+	var camera_center := camera.get_screen_center_position()
+	return (world_position - camera_center) * camera.zoom + viewport_size * 0.5
+
+
+func _quest_arrow_label_position(arrow_position: Vector2, direction: Vector2, viewport_size: Vector2) -> Vector2:
+	var label_position := arrow_position + QUEST_ARROW_LABEL_OFFSET
+	if absf(direction.x) > absf(direction.y):
+		if direction.x > 0.0:
+			label_position.x = arrow_position.x - QUEST_ARROW_LABEL_SIZE.x - 18.0
+		else:
+			label_position.x = arrow_position.x + 18.0
+	if direction.y > 0.0:
+		label_position.y = arrow_position.y - QUEST_ARROW_LABEL_SIZE.y - 12.0
+	else:
+		label_position.y = arrow_position.y + 12.0
+
+	label_position.x = clampf(label_position.x, 10.0, maxf(10.0, viewport_size.x - QUEST_ARROW_LABEL_SIZE.x - 10.0))
+	label_position.y = clampf(label_position.y, 10.0, maxf(10.0, viewport_size.y - QUEST_ARROW_LABEL_SIZE.y - 10.0))
+	return label_position
+
+
 func _build_cheat_panel() -> void:
 	_cheat_panel = Panel.new()
 	_cheat_panel.name = "CheatPanel"
@@ -695,6 +814,10 @@ func _make_cheat_button(text: String) -> Button:
 	return button
 
 
+func _dev_cheats_enabled() -> bool:
+	return OS.is_debug_build()
+
+
 func _toggle_cheat_panel() -> void:
 	if _cheat_panel == null:
 		return
@@ -750,6 +873,24 @@ func _cheat_add_companion() -> void:
 func _cheat_heal_party() -> void:
 	party_panel.heal_party()
 	_finish_cheat("Party healed.")
+
+
+func _cheat_teleport_player(target_position: Vector2) -> void:
+	var safe_position: Vector2 = campaign_map.constrain_land_position(target_position, player.global_position)
+	_pending_encounter = {}
+	player.stop_travel()
+	player.global_position = safe_position
+	player.velocity = Vector2.ZERO
+	_last_player_position = safe_position
+	GameState.campaign_position = safe_position
+	campaign_map.player_position = safe_position
+	_camera_following_player = true
+	if camera != null:
+		camera.position = Vector2.ZERO
+	_finish_cheat("Teleported to %d, %d." % [int(round(safe_position.x)), int(round(safe_position.y))])
+	_update_location_label(true)
+	_update_location_tooltip()
+	_update_quest_arrow()
 
 
 func _cheat_add_inventory_supplies() -> void:
@@ -875,9 +1016,9 @@ func _show_dialogue(target: Dictionary) -> void:
 	_hide_location_tooltip()
 	dialogue_title.text = _dialogue_title_for(target)
 	_dialogue_target = target.duplicate()
-	_maybe_complete_ziklag_objective(_dialogue_target)
 	_dialogue_recruit_count = _roll_recruit_count_for(target)
-	_dialogue_pages = _dialogue_pages_for(target)
+	var story_pages := _complete_story_visit_if_ready(_dialogue_target)
+	_dialogue_pages = story_pages if not story_pages.is_empty() else _dialogue_pages_for(target)
 	_dialogue_page_index = 0
 	dialogue_panel.visible = true
 	_render_dialogue_page()
@@ -1211,14 +1352,154 @@ func _maybe_complete_ziklag_objective(target: Dictionary) -> void:
 		return
 	if String(target.get("name", "")) != "Ziklag":
 		return
+	var active_story := GameState.get_active_main_story_quest()
+	if String(active_story.get("id", "")) != "ziklag_refuge":
+		return
 	if GameState.get_party_men_count() < GameState.get_objective_target_men():
 		return
 
-	GameState.objective_complete = true
-	GameState.adjust_morale(8)
-	GameState.last_campaign_notice = "Ziklag is reached. The first pressure loop is won."
-	campaign_map.break_player_trail_at(player.global_position, "Ziklag refuge")
-	GameState.clear_all_lord_pursuit_states()
+	var story_pages := _complete_story_quest(active_story)
+	if not story_pages.is_empty():
+		_dialogue_pages = story_pages
+		_dialogue_page_index = 0
+		_render_dialogue_page()
+
+
+func _complete_story_visit_if_ready(target: Dictionary) -> Array[String]:
+	if String(target.get("type", "")) != "settlement":
+		return []
+
+	var active_story := GameState.get_active_main_story_quest()
+	if not active_story.is_empty() and _story_quest_matches_target(active_story, target):
+		if String(active_story.get("id", "")) == "ziklag_refuge" and GameState.get_party_men_count() < GameState.get_objective_target_men():
+			return []
+		return _complete_story_quest(active_story)
+
+	for optional_story in GameState.get_available_optional_story_quests():
+		if _story_quest_matches_target(optional_story, target):
+			return _complete_story_quest(optional_story)
+
+	return []
+
+
+func _story_quest_matches_target(quest: Dictionary, target: Dictionary) -> bool:
+	var target_name := String(target.get("name", ""))
+	if target_name.is_empty():
+		return false
+	return Array(quest.get("target_names", [])).has(target_name)
+
+
+func _complete_story_quest(quest: Dictionary) -> Array[String]:
+	var quest_id := String(quest.get("id", ""))
+	if quest_id.is_empty() or GameState.is_story_quest_complete(quest_id):
+		return []
+
+	var pages := _story_completion_pages(quest_id)
+	_apply_story_rewards(quest_id)
+	GameState.mark_story_quest_complete(quest_id)
+	GameState.last_campaign_notice = "%s complete." % String(quest.get("title", "Story beat"))
+	_save_campaign_state()
+	_update_status_label()
+	campaign_map.queue_redraw()
+	return pages
+
+
+func _apply_story_rewards(quest_id: String) -> void:
+	match quest_id:
+		"shepherds_teeth":
+			GameState.adjust_food(4)
+			GameState.adjust_morale(4)
+			GameState.award_player_sling_xp(8)
+		"bread_to_brothers":
+			GameState.adjust_food(-2)
+			GameState.adjust_morale(3)
+			GameState.adjust_heat(2)
+		"champion_in_the_valley":
+			GameState.adjust_morale(8)
+			GameState.adjust_heat(18)
+			GameState.adjust_silver(10)
+			GameState.award_player_sling_xp(25)
+		"court_music_bad_spear":
+			GameState.adjust_silver(6)
+			GameState.adjust_heat(10)
+			GameState.adjust_morale(-2)
+			campaign_map.force_player_sighting_for_debug(player.global_position, 70.0)
+		"nob_and_the_bread":
+			GameState.adjust_food(6)
+			GameState.adjust_heat(12)
+			GameState.adjust_morale(-1)
+		"cave_of_adullam":
+			party_panel.add_generic_soldiers(5)
+			GameState.adjust_morale(6)
+			GameState.adjust_heat(4)
+		"keilah_border_fire":
+			GameState.adjust_food(8)
+			GameState.adjust_morale(5)
+			GameState.adjust_heat(8)
+			party_panel.add_generic_soldiers(2)
+		"engedi_mercy":
+			GameState.adjust_heat(-18)
+			GameState.adjust_morale(5)
+			campaign_map.break_player_trail_at(player.global_position, "En-gedi caves")
+			GameState.clear_all_lord_pursuit_states()
+		"ziklag_refuge":
+			GameState.objective_complete = true
+			GameState.adjust_morale(8)
+			GameState.adjust_heat(-12)
+			campaign_map.break_player_trail_at(player.global_position, "Ziklag refuge")
+			GameState.clear_all_lord_pursuit_states()
+
+	GameState.save_party_data(party_panel.get_party_data())
+
+
+func _story_completion_pages(quest_id: String) -> Array[String]:
+	match quest_id:
+		"shepherds_teeth":
+			return [
+				"The sheep break first. Then the brush breaks. A predator comes low through the grass, hungry enough to ignore shouting.",
+				"You meet it with sling-stone, staff, and the ugly calm of a shepherd who cannot afford panic. The flock lives. Jesse's house has food for the road. Food +4. Morale +4. Sling XP +8."
+			]
+		"bread_to_brothers":
+			return [
+				"You reach the camp near Socoh with bread, grain, and cheese from Bethlehem. The men at the line are tired, proud, and sick of hearing Philistine laughter roll across the valley.",
+				"Your brothers take the food. The camp takes your measure. Food -2. Morale +3. Heat +2. Optional: Azekah now holds the champion's challenge."
+			]
+		"champion_in_the_valley":
+			return [
+				"At Azekah the valley narrows into a theater. A Philistine champion makes fear sound official, as if size itself were a covenant.",
+				"You answer with a shepherd's weapon and a clean throw. The story will grow teeth before sunset. Silver +10. Morale +8. Heat +18. Sling XP +25."
+			]
+		"court_music_bad_spear":
+			return [
+				"At Gibeah, Saul's court still remembers your music. Favor opens the door; envy waits inside it with a spear in its hand.",
+				"You leave alive, paid, and watched. Jonathan's warning has the shape of friendship and exile. Silver +6. Heat +10. Morale -2."
+			]
+		"nob_and_the_bread":
+			return [
+				"At Nob, Ahimelech listens with priestly caution. Hunger makes every answer shorter. The holy bread is given because men are still men before they are symbols.",
+				"Doeg the Edomite sees enough. Help has a cost. Food +6. Heat +12. Morale -1."
+			]
+		"cave_of_adullam":
+			return [
+				"Adullam is not a palace. It is cave-shadow, hard ground, and men who arrive carrying debts, grief, warrants, and bad sleep.",
+				"You do not get an army. You get the beginning of one. Five men swear in. Morale +6. Heat +4."
+			]
+		"keilah_border_fire":
+			return [
+				"Keilah's threshing floors are worth stealing, so raiders come for them. The town needs someone dangerous enough to answer before harvest becomes ash.",
+				"You drive the pressure off long enough for the gates to open. Food +8. Morale +5. Heat +8. Two local men join."
+			]
+		"engedi_mercy":
+			return [
+				"En-gedi swallows sound. Saul's men pass close enough that one careless breath could become a battle.",
+				"You choose proof over blood and let the king live. Some men call it weakness. Better men hear the iron in it. Heat -18. Morale +5. Pursuit broken."
+			]
+		"ziklag_refuge":
+			return [
+				"You reach Ziklag with enough men to be more than a fugitive's shadow. The band has weight now: names, blades, hunger, and loyalty.",
+				"For the first time in days, Saul's road is behind you instead of around your throat. This is not a kingdom yet, but it is a foothold. Morale +8. Heat -12."
+			]
+	return []
 
 
 func _can_take_food_by_force() -> bool:
@@ -1430,19 +1711,72 @@ func _can_recruit_from_dialogue_town() -> bool:
 		and GameState.can_recruit_from_settlement(String(_dialogue_target.get("name", "")))
 
 
-func _is_manual_movement_pressed() -> bool:
-	return Input.is_key_pressed(KEY_A) \
-		or Input.is_key_pressed(KEY_D) \
-		or Input.is_key_pressed(KEY_W) \
-		or Input.is_key_pressed(KEY_S) \
-		or Input.is_key_pressed(KEY_LEFT) \
-		or Input.is_key_pressed(KEY_RIGHT) \
-		or Input.is_key_pressed(KEY_UP) \
-		or Input.is_key_pressed(KEY_DOWN)
+func _travel_player_to(target_position: Vector2) -> void:
+	player.travel_to(target_position)
+	_camera_following_player = true
+
+
+func _update_camera_pan(delta: float) -> void:
+	if camera == null:
+		return
+
+	var player_is_moving := _player_is_moving_or_traveling()
+	var pan_vector := _get_camera_pan_vector()
+	if _is_camera_pan_allowed() and not player_is_moving and pan_vector != Vector2.ZERO:
+		_camera_following_player = false
+		_pan_camera(pan_vector, delta)
+		return
+
+	if player_is_moving:
+		_camera_following_player = true
+
+	if _camera_following_player:
+		_recenter_camera_on_player(delta)
+
+
+func _get_camera_pan_vector() -> Vector2:
+	var pan_vector := Vector2.ZERO
+	if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+		pan_vector.x -= 1.0
+	if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+		pan_vector.x += 1.0
+	if Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP):
+		pan_vector.y -= 1.0
+	if Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN):
+		pan_vector.y += 1.0
+	return pan_vector.normalized()
+
+
+func _is_camera_pan_allowed() -> bool:
+	return not dialogue_panel.visible and not _loot_panel_active
+
+
+func _player_is_moving_or_traveling() -> bool:
+	return player.velocity.length() > MOVEMENT_EPSILON or player.is_traveling()
+
+
+func _pan_camera(pan_vector: Vector2, delta: float) -> void:
+	var zoom_scale := maxf(camera.zoom.x, 0.01)
+	var pan_step := pan_vector * CAMERA_PAN_SCREEN_SPEED * delta / zoom_scale
+	var target_center := player.global_position + camera.position + pan_step
+	var playable_rect: Rect2 = campaign_map.get_playable_rect()
+	target_center.x = clampf(target_center.x, playable_rect.position.x, playable_rect.end.x)
+	target_center.y = clampf(target_center.y, playable_rect.position.y, playable_rect.end.y)
+	camera.position = target_center - player.global_position
+
+
+func _recenter_camera_on_player(delta: float) -> void:
+	if camera.position.length() <= CAMERA_RECENTER_EPSILON:
+		camera.position = Vector2.ZERO
+		return
+
+	var recenter_weight := clampf(CAMERA_RECENTER_LERP_SPEED * delta, 0.0, 1.0)
+	camera.position = camera.position.lerp(Vector2.ZERO, recenter_weight)
 
 
 func _should_follow_mouse_pointer() -> bool:
 	return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) \
+		and not (_dev_cheats_enabled() and Input.is_key_pressed(KEY_CTRL)) \
 		and _pending_encounter.is_empty() \
 		and not dialogue_panel.visible \
 		and not _is_pointer_over_inventory() \

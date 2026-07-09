@@ -65,7 +65,7 @@ offset_right = 900.0
 offset_bottom = 46.0
 theme_override_colors/font_color = Color(0.917647, 0.839216, 0.639216, 1)
 theme_override_font_sizes/font_size = 18
-text = "Right mouse: aim 1.5x | Hold/release left mouse: sling | Esc: map"
+text = "Right mouse: aim 1.5x | C/Ctrl: crouch | Hold/release left mouse: sling | Esc: map"
 
 [node name="ChargeBar" type="ProgressBar" parent="HUD" unique_id=2026896536]
 offset_left = 22.0

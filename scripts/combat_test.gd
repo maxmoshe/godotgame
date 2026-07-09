@@ -3,13 +3,18 @@ extends Node3D
 const CombatPlayer := preload("res://scripts/combat_player.gd")
 const TargetDummy := preload("res://scripts/target_dummy.gd")
 const SoldierEnemy := preload("res://scripts/soldier_enemy.gd")
+const CombatPredator := preload("res://scripts/combat_predator.gd")
+const CombatLivestock := preload("res://scripts/combat_livestock.gd")
 const CombatBiomeProfiles := preload("res://scripts/combat_biome_profiles.gd")
 const TerrainGrassAlbedo := preload("res://assets/textures/terrain/rocky_grass/rocky_terrain_02_diff_1k.jpg")
 const TerrainGrassHeight := preload("res://assets/textures/terrain/rocky_grass/rocky_terrain_02_disp_1k.png")
 const TerrainDirtAlbedo := preload("res://assets/textures/terrain/rocky_gravel/gravelly_sand_diff_1k.jpg")
 const TerrainDirtHeight := preload("res://assets/textures/terrain/rocky_gravel/gravelly_sand_disp_1k.png")
+const PathSandAlbedo := preload("res://assets/textures/terrain/beach/aerial_beach_01_diff_1k.jpg")
+const PathSandHeight := preload("res://assets/textures/terrain/beach/aerial_beach_01_disp_1k.png")
 const StoneAlbedo := preload("res://assets/textures/terrain/marble/marble_rock_02_diff_1k.jpg")
 const StoneHeight := preload("res://assets/textures/terrain/marble/marble_rock_02_disp_1k.png")
+const SIEGE_GATE_DOOR_ALBEDO_PATH := "res://assets/textures/siege/siege_gate_door_albedo.png"
 
 const TERRAIN_SIZE := 176.0
 const TERRAIN_STEPS := 144
@@ -23,6 +28,7 @@ const SMALL_ROCK_MESH_VARIANTS := 24
 const TERRAIN_COLOR_LOW := Color("#566f38")
 const TERRAIN_COLOR_HIGH := Color("#8a9a59")
 const PATH_COLOR := Color("#c0a56d")
+const STANDALONE_TEST_BIOME_ID := 2
 const COMMAND_RAY_LENGTH := 185.0
 const COMMAND_RAY_STEP := 0.45
 const COMMAND_INVALID_POSITION := Vector3(999999.0, 999999.0, 999999.0)
@@ -35,6 +41,9 @@ const CAMPAIGN_CHUNK_SIZE := 220.0
 const CAMPAIGN_TO_TERRAIN_SCALE := 8.0
 const COMBAT_SPATIAL_CELL_SIZE := 6.0
 const COMBAT_SPATIAL_REFRESH_SECONDS := 0.16
+const COMBAT_SPATIAL_DIRECT_SCAN_RADIUS := COMBAT_SPATIAL_CELL_SIZE * 5.0
+const FLEEING_CLEANUP_SECONDS := 0.20
+const COMBAT_RESULT_CHECK_SECONDS := 0.20
 const COMMAND_GROUP_ALL := "all"
 const COMMAND_GROUP_MELEE := "melee"
 const COMMAND_GROUP_ARCHERS := "archers"
@@ -47,6 +56,116 @@ const BATTLEFIELD_WALL_FADE_NEAR := 1.4
 const BATTLEFIELD_WALL_FADE_FAR := 19.0
 const BATTLEFIELD_FLEE_PROMPT_DISTANCE := 5.5
 const BATTLEFIELD_NPC_EXIT_MARGIN := 0.35
+const SIEGE_FORT_CENTER := Vector2(0.0, -34.0)
+const SIEGE_FORT_EXCLUSION_RADIUS := 31.0
+const SIEGE_WALL_SEGMENT_LENGTH := 4.0
+const SIEGE_STRUCTURE_COLLISION_LAYER := 1
+const SIEGE_STRUCTURE_GROUND_SINK := 0.45
+const SIEGE_WALL_THICKNESS := 3.2
+const SIEGE_MERLON_WIDTH := 1.05
+const SIEGE_MERLON_HEIGHT := 0.78
+const SIEGE_MERLON_DEPTH := 0.68
+const SIEGE_WALL_STAIR_LENGTH := 10.5
+const SIEGE_WALL_STAIR_WIDTH := SIEGE_WALL_THICKNESS
+const SIEGE_STAIR_GROUND_SINK := 0.25
+const SIEGE_STAIR_START_HEIGHT := 0.035
+const SIEGE_STAIR_END_LIFT := 0.28
+const SIEGE_LONG_WALL_STAIR_END_LIFT := 0.42
+const SIEGE_STAIR_LANDING_LENGTH := 2.6
+const SIEGE_STAIR_LANDING_HEIGHT := 0.24
+const SIEGE_LONG_WALL_STAIR_OVERLAP := 0.58
+const SIEGE_TOWER_RAMP_WIDTH := SIEGE_WALL_THICKNESS
+const SIEGE_TOWER_RAMP_THICKNESS := 0.32
+const SIEGE_TOWER_RAMP_END_LIFT := 0.38
+const SIEGE_WALL_HEIGHT_MULTIPLIER := 1.3
+const SIEGE_NORTH_WALL_HEIGHT := 3.2 * SIEGE_WALL_HEIGHT_MULTIPLIER
+const SIEGE_SIDE_WALL_HEIGHT := 2.9 * SIEGE_WALL_HEIGHT_MULTIPLIER
+const SIEGE_GATE_WALL_HEIGHT := 2.55 * SIEGE_WALL_HEIGHT_MULTIPLIER
+const SIEGE_NORTH_TOWER_HEIGHT := 5.6 * SIEGE_WALL_HEIGHT_MULTIPLIER
+const SIEGE_GATE_TOWER_HEIGHT := 4.8 * SIEGE_WALL_HEIGHT_MULTIPLIER
+const SIEGE_GATEHOUSE_PIER_HEIGHT := 4.2 * SIEGE_WALL_HEIGHT_MULTIPLIER
+const SIEGE_GATEHOUSE_LINTEL_Y := 3.05 * SIEGE_WALL_HEIGHT_MULTIPLIER
+const SIEGE_DOOR_HEALTH_GATE := 5
+
+
+class BreakableSiegeDoor:
+	extends StaticBody3D
+
+	var max_health := 32
+	var health := 32
+	var debris_material: Material
+	var _broken := false
+	var _health_label: Label3D
+
+	func configure(new_health: int, new_debris_material: Material, label_height := 1.8) -> void:
+		max_health = maxi(1, new_health)
+		health = max_health
+		debris_material = new_debris_material
+		_ensure_health_label(label_height)
+		_update_health_label()
+
+	func take_hit(damage: int) -> void:
+		_apply_damage(damage)
+
+	func take_damage(damage: int, _source_position := Vector3.ZERO) -> void:
+		_apply_damage(damage)
+
+	func take_projectile_hit(damage: int, _hit_position: Vector3) -> int:
+		_apply_damage(damage)
+		return maxi(1, damage)
+
+	func take_projectile_hit_shape(damage: int, hit_position: Vector3, _hit_shape_name: String) -> int:
+		return take_projectile_hit(damage, hit_position)
+
+	func _apply_damage(damage: int) -> void:
+		if _broken:
+			return
+		health -= maxi(1, damage)
+		_update_health_label()
+		if health <= 0:
+			_break_open()
+
+	func _break_open() -> void:
+		_broken = true
+		_spawn_debris()
+		queue_free()
+
+	func _spawn_debris() -> void:
+		var parent_node := get_parent() as Node3D
+		if parent_node == null:
+			return
+
+		for index in range(4):
+			var plank := MeshInstance3D.new()
+			plank.name = "BrokenDoorPlank"
+			var mesh := BoxMesh.new()
+			mesh.size = Vector3(0.32, 1.55 - float(index) * 0.14, 0.12)
+			plank.mesh = mesh
+			if debris_material != null:
+				plank.material_override = debris_material
+			parent_node.add_child(plank)
+			var side_offset := (float(index) - 1.5) * 0.43
+			var drop := 0.28 + float(index % 2) * 0.18
+			plank.global_position = global_position + global_transform.basis * Vector3(side_offset, -drop, 0.16 + float(index) * 0.08)
+			plank.rotation = rotation + Vector3(deg_to_rad(72.0 + float(index) * 9.0), deg_to_rad(float(index) * 17.0), deg_to_rad(-18.0 + float(index) * 12.0))
+
+	func _ensure_health_label(label_height: float) -> void:
+		if _health_label == null:
+			_health_label = Label3D.new()
+			_health_label.name = "DoorHealthLabel"
+			_health_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+			_health_label.font_size = 36
+			_health_label.outline_size = 7
+			_health_label.outline_modulate = Color("#1a100b")
+			_health_label.modulate = Color("#f2d18a")
+			_health_label.no_depth_test = true
+			add_child(_health_label)
+		_health_label.position = Vector3(0.0, label_height, 0.0)
+
+	func _update_health_label() -> void:
+		if _health_label == null:
+			return
+		_health_label.text = "%d/%d HP" % [maxi(0, health), max_health]
 
 @onready var player: CharacterBody3D = $Player
 @onready var player_camera: Camera3D = $Player/CameraPivot/Camera3D
@@ -83,6 +202,7 @@ var _combat_uv_offset := Vector2.ZERO
 var _combat_context: Dictionary = {}
 var _combat_map_context: Dictionary = {}
 var _biome_profile: Dictionary = {}
+var _path_points: Array[Vector3] = []
 var _combat_result_applied := false
 var _lord_enemy_start_count := 0
 var _lord_friendly_start_count := 0
@@ -103,6 +223,8 @@ var _combat_soldiers_by_faction := {}
 var _combat_spatial_buckets := {}
 var _combat_spatial_dirty := true
 var _combat_spatial_refresh_time := 0.0
+var _fleeing_cleanup_time := 0.0
+var _combat_result_check_time := 0.0
 var _flee_prompt_panel: Panel
 var _flee_prompt_title: Label
 var _flee_prompt_body: Label
@@ -112,6 +234,7 @@ var _flee_prompt_visible := false
 func _ready() -> void:
 	_combat_context = GameState.get_combat_context()
 	_combat_map_context = GameState.get_combat_map_context()
+	_apply_standalone_test_biome()
 	_biome_profile = CombatBiomeProfiles.profile_for_id(int(_combat_map_context.get("biome_id", CombatBiomeProfiles.DEFAULT_BIOME_ID)))
 	_capture_combat_map_context()
 	_setup_player_boundary_collision()
@@ -124,7 +247,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_update_combat_spatial_index(delta)
 	_update_battlefield_boundary()
-	_remove_fleeing_soldiers_beyond_wall()
+	_remove_fleeing_soldiers_beyond_wall(delta)
 
 	if Input.is_key_pressed(KEY_ESCAPE):
 		if _is_lord_combat():
@@ -142,14 +265,28 @@ func _process(delta: float) -> void:
 	reticle.modulate = Color("#56ff8d") if _command_mode else Color("#f3d67d") if player.aiming else Color("#f4efe0")
 	health_label.text = player.get_health_text()
 	health_label.modulate = Color("#ff6c4f") if player.is_recently_damaged() else Color("#f4d27a")
-	aim_label.text = "Space: jump | Hold left mouse to spin faster, release on full charge | Esc: map"
+	aim_label.text = "Space: jump | C toggles crouch, Ctrl holds | Hold left mouse to sling | Esc: map"
 	if player.is_release_queued():
 		aim_label.text = "Release mistimed: stone goes on the next full rotation | Esc: map"
+	elif player.is_sliding():
+		aim_label.text = "Sliding downhill | C/Ctrl crouch | Sprint disabled | Esc: map"
+	elif player.is_crouching():
+		aim_label.text = "Crouched: slower, lower, no sprint | Downhill crouch slides | Esc: map"
 	elif player.aiming:
 		aim_label.text = "Aiming: 1.5x zoom | Early release cancels, full charge is the first firing window | Esc: map"
 
 	_update_velocity_label()
-	_check_lord_combat_result()
+	_check_lord_combat_result(delta)
+
+
+func _apply_standalone_test_biome() -> void:
+	if GameState.has_combat_context():
+		return
+
+	var profile := CombatBiomeProfiles.profile_for_id(STANDALONE_TEST_BIOME_ID)
+	_combat_map_context["biome_id"] = int(profile.get("biome_id", STANDALONE_TEST_BIOME_ID))
+	_combat_map_context["biome_key"] = String(profile.get("biome_key", "shephelah_foothills"))
+	_combat_map_context["biome_name"] = String(profile.get("name", "Shephelah foothills"))
 
 
 func register_combat_soldier(soldier: Node3D, soldier_faction: String) -> void:
@@ -180,7 +317,7 @@ func get_combat_soldiers() -> Array[Node3D]:
 
 
 func get_combat_soldiers_for_faction(soldier_faction: String) -> Array:
-	return Array(_combat_soldiers_by_faction.get(soldier_faction, []))
+	return _combat_soldiers_by_faction.get(soldier_faction, [])
 
 
 func get_combat_soldier_count() -> int:
@@ -194,6 +331,10 @@ func get_combat_terrain_height(position: Vector3) -> float:
 func get_combat_terrain_slope(position: Vector3) -> float:
 	var normal := _terrain_normal(position.x, position.z)
 	return 1.0 - clampf(normal.dot(Vector3.UP), 0.0, 1.0)
+
+
+func get_combat_terrain_normal(position: Vector3) -> Vector3:
+	return _terrain_normal(position.x, position.z)
 
 
 func get_nearby_combat_soldiers(center: Vector3, radius: float, soldier_faction := "") -> Array[Node3D]:
@@ -220,6 +361,32 @@ func get_nearby_combat_soldiers(center: Vector3, radius: float, soldier_faction 
 	return result
 
 
+func get_nearest_combat_soldier(center: Vector3, radius: float, soldier_faction := "", excluded: Node = null) -> Node3D:
+	if radius > COMBAT_SPATIAL_DIRECT_SCAN_RADIUS:
+		var direct_source: Array = _combat_soldiers
+		if soldier_faction != "":
+			direct_source = _combat_soldiers_by_faction.get(soldier_faction, [])
+		return _nearest_combat_soldier_in_source(direct_source, center, radius * radius, soldier_faction, excluded)
+
+	if _combat_spatial_dirty or _combat_spatial_buckets.is_empty():
+		_rebuild_combat_spatial_index()
+
+	var best: Node3D
+	var best_distance_squared := radius * radius
+	var center_key := _combat_spatial_key(center)
+	var cell_radius := int(ceil(radius / COMBAT_SPATIAL_CELL_SIZE))
+	for x_offset in range(-cell_radius, cell_radius + 1):
+		for z_offset in range(-cell_radius, cell_radius + 1):
+			var bucket_key := Vector2i(center_key.x + x_offset, center_key.y + z_offset)
+			var bucket: Array = _combat_spatial_buckets.get(bucket_key, [])
+			var candidate := _nearest_combat_soldier_in_source(bucket, center, best_distance_squared, soldier_faction, excluded)
+			if candidate == null:
+				continue
+			best = candidate
+			best_distance_squared = center.distance_squared_to(candidate.global_position)
+	return best
+
+
 func _update_combat_spatial_index(delta: float) -> void:
 	_combat_spatial_refresh_time = maxf(0.0, _combat_spatial_refresh_time - delta)
 	if _combat_spatial_refresh_time > 0.0 and not _combat_spatial_dirty:
@@ -241,6 +408,23 @@ func _rebuild_combat_spatial_index() -> void:
 		var bucket: Array = _combat_spatial_buckets[bucket_key]
 		bucket.append(soldier)
 	_combat_spatial_dirty = false
+
+
+func _nearest_combat_soldier_in_source(source: Array, center: Vector3, max_distance_squared: float, soldier_faction: String, excluded: Node) -> Node3D:
+	var best: Node3D
+	var best_distance_squared := max_distance_squared
+	for soldier in source:
+		var node := soldier as Node3D
+		if node == excluded or not _is_live_combat_soldier(node):
+			continue
+		if soldier_faction != "":
+			if not node.has_method("get_faction") or node.get_faction() != soldier_faction:
+				continue
+		var distance_squared := center.distance_squared_to(node.global_position)
+		if distance_squared <= best_distance_squared:
+			best = node
+			best_distance_squared = distance_squared
+	return best
 
 
 func _prune_combat_soldier_registry() -> void:
@@ -412,10 +596,14 @@ func _distance_inside_battlefield_wall(position: Vector3) -> float:
 	return BATTLEFIELD_WALL_HALF - maxf(absf(position.x), absf(position.z))
 
 
-func _remove_fleeing_soldiers_beyond_wall() -> void:
-	var soldiers := _combat_soldiers.duplicate()
-	for soldier in soldiers:
-		var soldier_node := soldier as Node3D
+func _remove_fleeing_soldiers_beyond_wall(delta: float) -> void:
+	_fleeing_cleanup_time = maxf(0.0, _fleeing_cleanup_time - delta)
+	if _fleeing_cleanup_time > 0.0:
+		return
+
+	_fleeing_cleanup_time = FLEEING_CLEANUP_SECONDS
+	for index in range(_combat_soldiers.size() - 1, -1, -1):
+		var soldier_node := _combat_soldiers[index] as Node3D
 		if not _is_live_combat_soldier(soldier_node):
 			continue
 		if not soldier_node.has_method("is_fleeing") or not soldier_node.call("is_fleeing"):
@@ -668,6 +856,7 @@ func _formation_slot_position(center: Vector3, index: int, count: int) -> Vector
 
 
 func _setup_environment() -> void:
+	_prepare_path_points()
 	_add_world_environment()
 	_add_sun()
 	_add_terrain()
@@ -675,6 +864,7 @@ func _setup_environment() -> void:
 	_add_battlefield_boundary()
 	_add_wadis()
 	_add_path()
+	_add_siege_structures()
 	_add_small_rocks()
 	_add_ground_clumps()
 	if _is_lord_combat():
@@ -687,12 +877,15 @@ func _add_test_targets_and_soldiers() -> void:
 	_add_target(Vector3(0.0, _terrain_height(0.0, -20.0), -20.0))
 	_add_target(Vector3(8.5, _terrain_height(8.5, -30.0), -30.0))
 	_add_target(Vector3(-13.0, _terrain_height(-13.0, -26.0), -26.0))
-	_add_soldier(Vector3(-9.0, _terrain_height(-9.0, -12.0), -12.0), "enemy", "sword", 5, 5, 3)
-	_add_soldier(Vector3(-5.5, _terrain_height(-5.5, -15.0), -15.0), "enemy", "sword", 5, 5, 3)
+	_add_soldier(Vector3(-9.0, _terrain_height(-9.0, -12.0), -12.0), "enemy", "sword", 6, 4, 3, "philistine_brute")
+	_add_soldier(Vector3(-5.5, _terrain_height(-5.5, -15.0), -15.0), "enemy", "sword", 7, 3, 3, "philistine_giant")
 	_add_soldier(Vector3(-13.5, _terrain_height(-13.5, -9.0), -9.0), "enemy", "bow", 3, 5, 4)
 	_add_soldier(Vector3(4.0, _terrain_height(4.0, -5.0), -5.0), "friendly", "sword", 5, 5, 3)
 	_add_soldier(Vector3(7.0, _terrain_height(7.0, -8.0), -8.0), "friendly", "sword", 5, 5, 3)
 	_add_soldier(Vector3(10.5, _terrain_height(10.5, -3.5), -3.5), "friendly", "bow", 3, 5, 4)
+	_add_sheep(Vector3(-1.2, _terrain_height(-1.2, -10.8) + PLAYER_FOOT_CLEARANCE, -10.8), deg_to_rad(-18.0))
+	_add_sheep(Vector3(1.9, _terrain_height(1.9, -11.4) + PLAYER_FOOT_CLEARANCE, -11.4), deg_to_rad(24.0))
+	_add_predator(Vector3(0.5, _terrain_height(0.5, -9.5) + PLAYER_FOOT_CLEARANCE, -9.5))
 
 
 func _add_lord_combat_parties() -> void:
@@ -722,7 +915,8 @@ func _add_lord_combat_parties() -> void:
 	for index in range(lead_enemy_count):
 		var weapon := _enemy_weapon_for_index(index)
 		var position := _battle_spawn_position(enemy_index, enemy_count, "enemy")
-		var soldier := _add_soldier(position, "enemy", weapon, 5, 5, 4 if weapon == "bow" else 3)
+		var lead_visual_variant := _enemy_visual_variant_for_index(enemy_index, enemy_count, String(_combat_context.get("enemy_faction", "")), enemy_lord_id, weapon)
+		var soldier := _add_soldier(position, "enemy", weapon, 5, 5, 4 if weapon == "bow" else 3, lead_visual_variant)
 		_set_combat_source(soldier, enemy_source_id)
 		_assign_battle_slot(soldier, _battle_engagement_slot_position(enemy_index, enemy_count, "enemy", weapon), enemy_index)
 		enemy_index += 1
@@ -738,7 +932,8 @@ func _add_lord_combat_parties() -> void:
 		for index in range(count):
 			var weapon := _enemy_weapon_for_index(enemy_index)
 			var position := _battle_spawn_position(enemy_index, enemy_count, "enemy")
-			var soldier := _add_soldier(position, "enemy", weapon, 5, 5, 4 if weapon == "bow" else 3)
+			var reinforcement_visual_variant := _enemy_visual_variant_for_index(enemy_index, enemy_count, String(reinforcement.get("faction", "")), lord_id, weapon)
+			var soldier := _add_soldier(position, "enemy", weapon, 5, 5, 4 if weapon == "bow" else 3, reinforcement_visual_variant)
 			_set_combat_source(soldier, source_id)
 			_assign_battle_slot(soldier, _battle_engagement_slot_position(enemy_index, enemy_count, "enemy", weapon), enemy_index)
 			enemy_index += 1
@@ -904,6 +1099,26 @@ func _enemy_weapon_for_index(index: int) -> String:
 	return "sword"
 
 
+func _enemy_visual_variant_for_index(index: int, count: int, source_faction: String, source_name: String, weapon: String) -> String:
+	if weapon == "bow" or not _is_philistine_source(source_faction, source_name):
+		return ""
+	if index == 0:
+		return "philistine_champion" if source_name.to_lower().contains("gath") else "philistine_giant"
+	if count >= 34 and index % 41 == 17:
+		return "philistine_giant"
+	if count >= 18 and index % 29 == 7:
+		return "philistine_brute"
+	return ""
+
+
+func _is_philistine_source(source_faction: String, source_name: String) -> bool:
+	var source_text := ("%s %s" % [source_faction, source_name]).to_lower()
+	return source_text.contains("philistine") \
+		or source_text.contains("gath") \
+		or source_text.contains("ashkelon") \
+		or source_text.contains("gaza")
+
+
 func _friendly_weapon_for_index(index: int) -> String:
 	if index % 6 == 5:
 		return "bow"
@@ -979,15 +1194,24 @@ func _record_source_loss(soldier: Node, counter: Dictionary, fallback_source_id:
 	counter[source_id] = int(counter.get(source_id, 0)) + 1
 
 
-func _check_lord_combat_result() -> void:
+func _check_lord_combat_result(delta: float) -> void:
 	if not _is_lord_combat() or _combat_result_applied:
 		return
-	var enemy_fleeing_count := _current_fleeing_soldier_count("enemy")
-	if _lord_enemy_start_count <= 0 or _lord_enemy_dead_count + _lord_enemy_fled_count + enemy_fleeing_count >= _lord_enemy_start_count:
+	if _lord_enemy_start_count <= 0 or _lord_enemy_dead_count + _lord_enemy_fled_count >= _lord_enemy_start_count:
 		_finish_lord_combat("victory")
 		return
 	if player.health <= 0:
 		_finish_lord_combat("defeat")
+		return
+
+	_combat_result_check_time = maxf(0.0, _combat_result_check_time - delta)
+	if _combat_result_check_time > 0.0:
+		return
+
+	_combat_result_check_time = COMBAT_RESULT_CHECK_SECONDS
+	var enemy_fleeing_count := _current_fleeing_soldier_count("enemy")
+	if _lord_enemy_dead_count + _lord_enemy_fled_count + enemy_fleeing_count >= _lord_enemy_start_count:
+		_finish_lord_combat("victory")
 
 
 func _finish_lord_combat(outcome: String) -> void:
@@ -1194,6 +1418,483 @@ func _add_battlefield_wall_segment(parent: Node3D, node_name: String, position: 
 	wall.add_child(mesh_instance)
 
 
+func _add_siege_structures() -> void:
+	var root := Node3D.new()
+	root.name = "CombatSiegeStructures"
+	add_child(root)
+
+	_register_decoration_exclusion_circle(Vector3(SIEGE_FORT_CENTER.x, 0.0, SIEGE_FORT_CENTER.y), SIEGE_FORT_EXCLUSION_RADIUS)
+
+	var stone_material := _make_stone_material()
+	var wood_material := _make_material(Color("#5d3d25"), 0.88, 0.0)
+	var gate_door_material := _make_siege_gate_door_material()
+	var banner_material := _make_material(Color("#8e2e2a"), 0.78, 0.0)
+	var highest_wall_ground := _siege_highest_terrain_on_wall_line(Vector2(-22.0, -44.0), Vector2(22.0, -44.0), SIEGE_WALL_THICKNESS)
+	highest_wall_ground = maxf(highest_wall_ground, _siege_highest_terrain_on_wall_line(Vector2(-22.0, -44.0), Vector2(-22.0, -24.0), SIEGE_WALL_THICKNESS))
+	highest_wall_ground = maxf(highest_wall_ground, _siege_highest_terrain_on_wall_line(Vector2(22.0, -44.0), Vector2(22.0, -24.0), SIEGE_WALL_THICKNESS))
+	highest_wall_ground = maxf(highest_wall_ground, _siege_highest_terrain_on_wall_line(Vector2(-22.0, -24.0), Vector2(-6.4, -24.0), SIEGE_WALL_THICKNESS))
+	highest_wall_ground = maxf(highest_wall_ground, _siege_highest_terrain_on_wall_line(Vector2(6.4, -24.0), Vector2(22.0, -24.0), SIEGE_WALL_THICKNESS))
+	var curtain_wall_top_y := highest_wall_ground + SIEGE_NORTH_WALL_HEIGHT - SIEGE_STRUCTURE_GROUND_SINK
+	var north_tower_top_y := curtain_wall_top_y + SIEGE_NORTH_TOWER_HEIGHT - SIEGE_NORTH_WALL_HEIGHT
+	var gate_tower_top_y := curtain_wall_top_y + SIEGE_GATE_TOWER_HEIGHT - SIEGE_GATE_WALL_HEIGHT
+	var half_stair_length := SIEGE_WALL_STAIR_LENGTH * 0.5
+	var side_stair_high_z := -38.0
+	var side_stair_center_z := side_stair_high_z + half_stair_length
+	var west_stair_x := -22.0 + SIEGE_WALL_THICKNESS * 0.5
+	var east_stair_x := 22.0 - SIEGE_WALL_THICKNESS * 0.5
+	var north_stair_high_x := 8.0
+	var north_stair_center_x := north_stair_high_x - half_stair_length
+	var north_stair_z := -44.0 + SIEGE_WALL_THICKNESS - SIEGE_LONG_WALL_STAIR_OVERLAP
+
+	_add_siege_wall_line(root, "NorthCurtainWall", Vector2(-22.0, -44.0), Vector2(22.0, -44.0), curtain_wall_top_y, SIEGE_WALL_THICKNESS, stone_material, true)
+	_add_siege_wall_line(root, "WestCurtainWall", Vector2(-22.0, -44.0), Vector2(-22.0, -24.0), curtain_wall_top_y, SIEGE_WALL_THICKNESS, stone_material, true)
+	_add_siege_wall_line(root, "EastCurtainWall", Vector2(22.0, -44.0), Vector2(22.0, -24.0), curtain_wall_top_y, SIEGE_WALL_THICKNESS, stone_material, true)
+	_add_siege_wall_line(root, "SouthWestGateWall", Vector2(-22.0, -24.0), Vector2(-6.4, -24.0), curtain_wall_top_y, SIEGE_WALL_THICKNESS, stone_material, true)
+	_add_siege_wall_line(root, "SouthEastGateWall", Vector2(6.4, -24.0), Vector2(22.0, -24.0), curtain_wall_top_y, SIEGE_WALL_THICKNESS, stone_material, true)
+
+	_add_siege_tower(root, "NorthWestTower", Vector2(-22.0, -44.0), 2.75, north_tower_top_y, stone_material)
+	_add_siege_tower(root, "NorthEastTower", Vector2(22.0, -44.0), 2.75, north_tower_top_y, stone_material)
+	_add_siege_tower(root, "SouthWestTower", Vector2(-22.0, -24.0), 2.35, gate_tower_top_y, stone_material)
+	_add_siege_tower(root, "SouthEastTower", Vector2(22.0, -24.0), 2.35, gate_tower_top_y, stone_material)
+	_add_siege_gatehouse(root, Vector2(0.0, -23.7), stone_material, gate_door_material, curtain_wall_top_y)
+	_add_siege_elevated_ramp(root, "NorthWestTowerAccessRamp", Vector2(-15.0, -44.0), Vector2(-21.35, -44.0), curtain_wall_top_y, north_tower_top_y, SIEGE_TOWER_RAMP_WIDTH, stone_material)
+	_add_siege_elevated_ramp(root, "NorthEastTowerAccessRamp", Vector2(15.0, -44.0), Vector2(21.35, -44.0), curtain_wall_top_y, north_tower_top_y, SIEGE_TOWER_RAMP_WIDTH, stone_material)
+	_add_siege_elevated_ramp(root, "SouthWestTowerAccessRamp", Vector2(-14.8, -24.0), Vector2(-21.25, -24.0), curtain_wall_top_y, gate_tower_top_y, SIEGE_TOWER_RAMP_WIDTH, stone_material)
+	_add_siege_elevated_ramp(root, "SouthEastTowerAccessRamp", Vector2(14.8, -24.0), Vector2(21.25, -24.0), curtain_wall_top_y, gate_tower_top_y, SIEGE_TOWER_RAMP_WIDTH, stone_material)
+	_add_siege_elevated_ramp(root, "NorthWestSideTowerAccessRamp", Vector2(-22.0, -36.4), Vector2(-22.0, -42.7), curtain_wall_top_y, north_tower_top_y, SIEGE_TOWER_RAMP_WIDTH, stone_material)
+	_add_siege_elevated_ramp(root, "NorthEastSideTowerAccessRamp", Vector2(22.0, -36.4), Vector2(22.0, -42.7), curtain_wall_top_y, north_tower_top_y, SIEGE_TOWER_RAMP_WIDTH, stone_material)
+	_add_siege_elevated_ramp(root, "SouthWestSideTowerAccessRamp", Vector2(-22.0, -31.8), Vector2(-22.0, -25.2), curtain_wall_top_y, gate_tower_top_y, SIEGE_TOWER_RAMP_WIDTH, stone_material)
+	_add_siege_elevated_ramp(root, "SouthEastSideTowerAccessRamp", Vector2(22.0, -31.8), Vector2(22.0, -25.2), curtain_wall_top_y, gate_tower_top_y, SIEGE_TOWER_RAMP_WIDTH, stone_material)
+	_add_siege_stairs(root, "WestWallStairs", Vector2(west_stair_x, side_stair_center_z), Vector2(0.0, -1.0), SIEGE_WALL_STAIR_LENGTH, SIEGE_WALL_STAIR_WIDTH, curtain_wall_top_y, stone_material)
+	_add_siege_stairs(root, "EastWallStairs", Vector2(east_stair_x, side_stair_center_z), Vector2(0.0, -1.0), SIEGE_WALL_STAIR_LENGTH, SIEGE_WALL_STAIR_WIDTH, curtain_wall_top_y, stone_material)
+	_add_siege_stairs(root, "NorthWallStairs", Vector2(north_stair_center_x, north_stair_z), Vector2(1.0, 0.0), SIEGE_WALL_STAIR_LENGTH, SIEGE_WALL_STAIR_WIDTH, curtain_wall_top_y, stone_material, SIEGE_LONG_WALL_STAIR_END_LIFT)
+	_add_siege_keep(root, Vector2(9.6, -37.4), stone_material, banner_material)
+	_add_siege_storehouse(root, Vector2(-10.6, -35.4), stone_material, wood_material)
+	_add_siege_barricade(root, "LeftApproachBarricade", Vector2(-11.5, -16.0), deg_to_rad(-12.0), wood_material)
+	_add_siege_barricade(root, "RightApproachBarricade", Vector2(10.2, -16.8), deg_to_rad(14.0), wood_material)
+
+
+func _add_siege_wall_line(parent: Node3D, node_name: String, start: Vector2, finish: Vector2, top_y: float, thickness: float, material: Material, add_merlons := false) -> void:
+	var delta := finish - start
+	var length := delta.length()
+	if length <= 0.01:
+		return
+
+	var direction := delta / length
+	var rotation_y := -atan2(direction.y, direction.x)
+	var perpendicular := Vector2(-direction.y, direction.x)
+	var segment_count := maxi(1, int(ceil(length / SIEGE_WALL_SEGMENT_LENGTH)))
+	for index in range(segment_count):
+		var t0 := float(index) / float(segment_count)
+		var t1 := float(index + 1) / float(segment_count)
+		var segment_start := start.lerp(finish, t0)
+		var segment_finish := start.lerp(finish, t1)
+		var center := segment_start.lerp(segment_finish, 0.5)
+		var segment_length := segment_start.distance_to(segment_finish) + 0.08
+		var segment_bottom_y := _siege_lowest_terrain_on_wall_line(segment_start, segment_finish, thickness) - SIEGE_STRUCTURE_GROUND_SINK
+		var segment_height := maxf(0.5, top_y - segment_bottom_y)
+		var segment_y_offset := segment_bottom_y - _terrain_height(center.x, center.y) + SIEGE_STRUCTURE_GROUND_SINK
+		_add_siege_box(parent, "%sSegment%d" % [node_name, index + 1], center, Vector3(segment_length, segment_height, thickness), material, rotation_y, segment_y_offset)
+		if add_merlons and index % 2 == 0:
+			var merlon_width := minf(SIEGE_MERLON_WIDTH, segment_length)
+			var merlon_offset := maxf(0.0, thickness * 0.5 - SIEGE_MERLON_DEPTH * 0.5)
+			for edge_index in range(2):
+				var edge_sign := -1.0 if edge_index == 0 else 1.0
+				var edge_name := "Outer" if edge_sign < 0.0 else "Inner"
+				var merlon_center: Vector2 = center + perpendicular * merlon_offset * edge_sign
+				var merlon_y_offset := top_y - _terrain_height(merlon_center.x, merlon_center.y) + SIEGE_STRUCTURE_GROUND_SINK
+				_add_siege_box(parent, "%s%sMerlon%d" % [node_name, edge_name, index + 1], merlon_center, Vector3(merlon_width, SIEGE_MERLON_HEIGHT, SIEGE_MERLON_DEPTH), material, rotation_y, merlon_y_offset)
+
+
+func _add_siege_gatehouse(parent: Node3D, center: Vector2, stone_material: Material, door_material: Material, wall_top_y: float) -> void:
+	var gate_lintel_bottom_y := _terrain_height(center.x, center.y) + SIEGE_GATEHOUSE_LINTEL_Y - SIEGE_STRUCTURE_GROUND_SINK
+	_add_siege_box_to_top(parent, "GatehouseLeftPier", center + Vector2(-4.8, 0.0), Vector3(3.2, 0.0, 3.4), wall_top_y, stone_material)
+	_add_siege_box_to_top(parent, "GatehouseRightPier", center + Vector2(4.8, 0.0), Vector3(3.2, 0.0, 3.4), wall_top_y, stone_material)
+	_add_siege_box_between_y(parent, "GatehouseUpperWall", center + Vector2(0.0, -0.08), Vector3(8.2, 0.0, SIEGE_WALL_THICKNESS), gate_lintel_bottom_y, wall_top_y, stone_material)
+	_add_breakable_siege_door(parent, "GatehouseDoorLeft", center + Vector2(-1.55, 0.35), Vector3(3.05, 3.35, 0.36), door_material, SIEGE_DOOR_HEALTH_GATE)
+	_add_breakable_siege_door(parent, "GatehouseDoorRight", center + Vector2(1.55, 0.35), Vector3(3.05, 3.35, 0.36), door_material, SIEGE_DOOR_HEALTH_GATE)
+
+
+func _add_siege_keep(parent: Node3D, center: Vector2, stone_material: Material, banner_material: Material) -> void:
+	_add_siege_box(parent, "InnerKeep", center, Vector3(7.4, 5.8, 6.8), stone_material)
+	_add_siege_box(parent, "InnerKeepUpperRoom", center + Vector2(-0.2, -0.2), Vector3(4.8, 2.35, 4.4), stone_material, 0.0, 5.8)
+	_add_siege_box(parent, "KeepNorthMerlon", center + Vector2(0.0, -3.55), Vector3(6.8, 0.65, 0.55), stone_material, 0.0, 5.8)
+	_add_siege_box(parent, "KeepSouthMerlon", center + Vector2(0.0, 3.55), Vector3(6.8, 0.65, 0.55), stone_material, 0.0, 5.8)
+	_add_siege_box(parent, "KeepWestMerlon", center + Vector2(-3.85, 0.0), Vector3(0.55, 0.65, 6.2), stone_material, 0.0, 5.8)
+	_add_siege_box(parent, "KeepEastMerlon", center + Vector2(3.85, 0.0), Vector3(0.55, 0.65, 6.2), stone_material, 0.0, 5.8)
+	_add_siege_box(parent, "KeepBanner", center + Vector2(0.0, 3.72), Vector3(2.2, 1.35, 0.12), banner_material, 0.0, 4.25)
+
+
+func _add_siege_storehouse(parent: Node3D, center: Vector2, wall_material: Material, wood_material: Material) -> void:
+	_add_siege_box(parent, "StoneStorehouse", center, Vector3(6.2, 2.65, 4.8), wall_material)
+	_add_siege_box(parent, "StorehouseRoof", center + Vector2(0.0, -0.05), Vector3(6.8, 0.75, 5.35), wood_material, deg_to_rad(0.0), 2.65)
+	_add_siege_box(parent, "StorehouseSideCrateA", center + Vector2(-4.6, 0.9), Vector3(1.2, 1.0, 1.15), wood_material)
+	_add_siege_box(parent, "StorehouseSideCrateB", center + Vector2(-4.8, -0.45), Vector3(1.45, 0.82, 1.0), wood_material)
+
+
+func _add_siege_tower(parent: Node3D, node_name: String, center: Vector2, radius: float, top_y: float, material: Material) -> void:
+	var bottom_y := _siege_lowest_terrain_in_circle(center, radius * 1.08) - SIEGE_STRUCTURE_GROUND_SINK
+	var height := maxf(1.0, top_y - bottom_y)
+	var position := Vector3(center.x, bottom_y + height * 0.5, center.y)
+	var tower := StaticBody3D.new()
+	tower.name = node_name
+	tower.position = position
+	tower.collision_layer = SIEGE_STRUCTURE_COLLISION_LAYER
+	tower.collision_mask = 0
+	parent.add_child(tower)
+
+	var collision := CollisionShape3D.new()
+	var box_shape := BoxShape3D.new()
+	box_shape.size = Vector3(radius * 1.65, height, radius * 1.65)
+	collision.shape = box_shape
+	tower.add_child(collision)
+
+	var mesh_instance := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = radius
+	mesh.bottom_radius = radius * 1.08
+	mesh.height = height
+	mesh.radial_segments = 10
+	mesh.rings = 1
+	mesh_instance.mesh = mesh
+	mesh_instance.material_override = material
+	tower.add_child(mesh_instance)
+
+	for index in range(4):
+		var angle := float(index) * TAU / 4.0 + PI * 0.25
+		var merlon_center := center + Vector2(cos(angle), sin(angle)) * radius * 0.82
+		var merlon_y_offset := top_y - _terrain_height(merlon_center.x, merlon_center.y) + SIEGE_STRUCTURE_GROUND_SINK
+		_add_siege_box(parent, "%sMerlon%d" % [node_name, index + 1], merlon_center, Vector3(0.82, 0.72, 0.82), material, -angle, merlon_y_offset)
+
+
+func _add_siege_stairs(parent: Node3D, node_name: String, center: Vector2, direction: Vector2, length: float, width: float, target_top_y: float, material: Material, end_lift := SIEGE_STAIR_END_LIFT) -> void:
+	if direction.length() <= 0.01:
+		return
+
+	var climb_direction := direction.normalized()
+	var low_end := center - climb_direction * (length * 0.5)
+	var high_end := center + climb_direction * (length * 0.5)
+	var ground_y := _terrain_height(low_end.x, low_end.y)
+	var body_y := ground_y - SIEGE_STAIR_GROUND_SINK
+	var lifted_target_top_y := target_top_y + end_lift
+	var rise := maxf(SIEGE_STAIR_START_HEIGHT + 0.08, lifted_target_top_y - body_y)
+	var body := StaticBody3D.new()
+	body.name = node_name
+	body.position = Vector3(center.x, body_y, center.y)
+	body.rotation.y = atan2(climb_direction.x, climb_direction.y)
+	body.collision_layer = SIEGE_STRUCTURE_COLLISION_LAYER
+	body.collision_mask = 0
+	parent.add_child(body)
+
+	var collision := CollisionShape3D.new()
+	var shape := ConvexPolygonShape3D.new()
+	shape.points = _stair_ramp_collision_points(width, length, rise)
+	collision.shape = shape
+	body.add_child(collision)
+
+	var ramp_mesh := MeshInstance3D.new()
+	ramp_mesh.name = "RampBody"
+	ramp_mesh.mesh = _make_stair_ramp_mesh(width, length, rise)
+	ramp_mesh.material_override = material
+	body.add_child(ramp_mesh)
+
+	var step_count := maxi(8, int(ceil(length / 0.55)))
+	for index in range(step_count):
+		var ratio := (float(index) + 0.5) / float(step_count)
+		var tread := MeshInstance3D.new()
+		tread.name = "StairTread%d" % (index + 1)
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(width + 0.14, 0.06, 0.16)
+		tread.mesh = mesh
+		tread.material_override = material
+		tread.position = Vector3(0.0, lerpf(SIEGE_STAIR_START_HEIGHT, rise, ratio) + 0.035, -length * 0.5 + length * ratio)
+		body.add_child(tread)
+
+	var landing_center := high_end + climb_direction * (SIEGE_STAIR_LANDING_LENGTH * 0.5)
+	_add_siege_landing_platform(parent, "%sLanding" % node_name, landing_center, Vector3(width + 0.26, SIEGE_STAIR_LANDING_HEIGHT, SIEGE_STAIR_LANDING_LENGTH), lifted_target_top_y, material, body.rotation.y)
+
+
+func _add_siege_elevated_ramp(parent: Node3D, node_name: String, start: Vector2, finish: Vector2, start_top_y: float, finish_top_y: float, width: float, material: Material) -> void:
+	var delta := finish - start
+	var length := delta.length()
+	if length <= 0.01:
+		return
+
+	var direction := delta / length
+	var center := start.lerp(finish, 0.5)
+	var lifted_finish_top_y := finish_top_y + SIEGE_TOWER_RAMP_END_LIFT
+	var base_y := minf(start_top_y, lifted_finish_top_y) - SIEGE_TOWER_RAMP_THICKNESS
+	var local_start_y := start_top_y - base_y
+	var local_finish_y := lifted_finish_top_y - base_y
+	var body := StaticBody3D.new()
+	body.name = node_name
+	body.position = Vector3(center.x, base_y, center.y)
+	body.rotation.y = atan2(direction.x, direction.y)
+	body.collision_layer = SIEGE_STRUCTURE_COLLISION_LAYER
+	body.collision_mask = 0
+	parent.add_child(body)
+
+	var collision := CollisionShape3D.new()
+	var shape := ConvexPolygonShape3D.new()
+	shape.points = _elevated_ramp_collision_points(width, length, local_start_y, local_finish_y)
+	collision.shape = shape
+	body.add_child(collision)
+
+	var ramp_mesh := MeshInstance3D.new()
+	ramp_mesh.name = "RampBody"
+	ramp_mesh.mesh = _make_elevated_ramp_mesh(width, length, local_start_y, local_finish_y)
+	ramp_mesh.material_override = material
+	body.add_child(ramp_mesh)
+
+	var step_count := maxi(6, int(ceil(length / 0.58)))
+	for index in range(step_count):
+		var ratio := (float(index) + 0.5) / float(step_count)
+		var tread := MeshInstance3D.new()
+		tread.name = "TowerRampTread%d" % (index + 1)
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(width + 0.08, 0.055, 0.15)
+		tread.mesh = mesh
+		tread.material_override = material
+		tread.position = Vector3(0.0, lerpf(local_start_y, local_finish_y, ratio) + 0.035, -length * 0.5 + length * ratio)
+		body.add_child(tread)
+
+
+func _stair_ramp_collision_points(width: float, length: float, rise: float) -> PackedVector3Array:
+	var half_width := width * 0.5
+	var half_length := length * 0.5
+	var low_height := SIEGE_STAIR_START_HEIGHT
+	return PackedVector3Array([
+		Vector3(-half_width, 0.0, -half_length),
+		Vector3(half_width, 0.0, -half_length),
+		Vector3(-half_width, 0.0, half_length),
+		Vector3(half_width, 0.0, half_length),
+		Vector3(-half_width, low_height, -half_length),
+		Vector3(half_width, low_height, -half_length),
+		Vector3(-half_width, rise, half_length),
+		Vector3(half_width, rise, half_length)
+	])
+
+
+func _make_stair_ramp_mesh(width: float, length: float, rise: float) -> ArrayMesh:
+	var half_width := width * 0.5
+	var half_length := length * 0.5
+	var low_height := SIEGE_STAIR_START_HEIGHT
+	var bottom_left_low := Vector3(-half_width, 0.0, -half_length)
+	var bottom_right_low := Vector3(half_width, 0.0, -half_length)
+	var bottom_left_high := Vector3(-half_width, 0.0, half_length)
+	var bottom_right_high := Vector3(half_width, 0.0, half_length)
+	var top_left_low := Vector3(-half_width, low_height, -half_length)
+	var top_right_low := Vector3(half_width, low_height, -half_length)
+	var top_left_high := Vector3(-half_width, rise, half_length)
+	var top_right_high := Vector3(half_width, rise, half_length)
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_low, bottom_right_high, bottom_left_high)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_low, bottom_right_low, bottom_right_high)
+	_append_siege_stair_triangle(vertices, normals, indices, top_left_low, top_left_high, top_right_low)
+	_append_siege_stair_triangle(vertices, normals, indices, top_right_low, top_left_high, top_right_high)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_low, bottom_left_high, top_left_high)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_low, top_left_high, top_left_low)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_right_low, top_right_low, top_right_high)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_right_low, top_right_high, bottom_right_high)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_low, top_left_low, top_right_low)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_low, top_right_low, bottom_right_low)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_high, bottom_right_high, top_right_high)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_high, top_right_high, top_left_high)
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _elevated_ramp_collision_points(width: float, length: float, start_y: float, finish_y: float) -> PackedVector3Array:
+	var half_width := width * 0.5
+	var half_length := length * 0.5
+	return PackedVector3Array([
+		Vector3(-half_width, 0.0, -half_length),
+		Vector3(half_width, 0.0, -half_length),
+		Vector3(-half_width, 0.0, half_length),
+		Vector3(half_width, 0.0, half_length),
+		Vector3(-half_width, start_y, -half_length),
+		Vector3(half_width, start_y, -half_length),
+		Vector3(-half_width, finish_y, half_length),
+		Vector3(half_width, finish_y, half_length)
+	])
+
+
+func _make_elevated_ramp_mesh(width: float, length: float, start_y: float, finish_y: float) -> ArrayMesh:
+	var half_width := width * 0.5
+	var half_length := length * 0.5
+	var bottom_left_start := Vector3(-half_width, 0.0, -half_length)
+	var bottom_right_start := Vector3(half_width, 0.0, -half_length)
+	var bottom_left_finish := Vector3(-half_width, 0.0, half_length)
+	var bottom_right_finish := Vector3(half_width, 0.0, half_length)
+	var top_left_start := Vector3(-half_width, start_y, -half_length)
+	var top_right_start := Vector3(half_width, start_y, -half_length)
+	var top_left_finish := Vector3(-half_width, finish_y, half_length)
+	var top_right_finish := Vector3(half_width, finish_y, half_length)
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+
+	_append_siege_stair_triangle(vertices, normals, indices, top_left_start, top_left_finish, top_right_start)
+	_append_siege_stair_triangle(vertices, normals, indices, top_right_start, top_left_finish, top_right_finish)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_start, bottom_right_finish, bottom_left_finish)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_start, bottom_right_start, bottom_right_finish)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_start, bottom_left_finish, top_left_finish)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_start, top_left_finish, top_left_start)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_right_start, top_right_start, top_right_finish)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_right_start, top_right_finish, bottom_right_finish)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_start, top_left_start, top_right_start)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_start, top_right_start, bottom_right_start)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_finish, bottom_right_finish, top_right_finish)
+	_append_siege_stair_triangle(vertices, normals, indices, bottom_left_finish, top_right_finish, top_left_finish)
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _append_siege_stair_triangle(vertices: PackedVector3Array, normals: PackedVector3Array, indices: PackedInt32Array, a: Vector3, b: Vector3, c: Vector3) -> void:
+	_append_rock_triangle(vertices, normals, indices, a, b, c)
+	_append_rock_triangle(vertices, normals, indices, c, b, a)
+
+
+func _add_siege_landing_platform(parent: Node3D, node_name: String, center: Vector2, size: Vector3, top_y: float, material: Material, rotation_y := 0.0) -> StaticBody3D:
+	var ground_y := _terrain_height(center.x, center.y)
+	return _add_siege_box(parent, node_name, center, size, material, rotation_y, top_y - ground_y - size.y + SIEGE_STRUCTURE_GROUND_SINK)
+
+
+func _add_breakable_siege_door(parent: Node3D, node_name: String, center: Vector2, size: Vector3, material: Material, health: int, rotation_y := 0.0, y_offset := 0.0) -> BreakableSiegeDoor:
+	var body := BreakableSiegeDoor.new()
+	body.name = node_name
+	body.position = _siege_grounded_position(center, size.y, y_offset)
+	body.rotation.y = rotation_y
+	body.collision_layer = SIEGE_STRUCTURE_COLLISION_LAYER
+	body.collision_mask = 0
+	body.configure(health, material, size.y * 0.5 + 0.45)
+	parent.add_child(body)
+
+	var collision := CollisionShape3D.new()
+	var box_shape := BoxShape3D.new()
+	box_shape.size = size
+	collision.shape = box_shape
+	body.add_child(collision)
+
+	var mesh_instance := MeshInstance3D.new()
+	var box_mesh := BoxMesh.new()
+	box_mesh.size = size
+	mesh_instance.mesh = box_mesh
+	mesh_instance.material_override = material
+	body.add_child(mesh_instance)
+	return body
+
+
+func _add_siege_barricade(parent: Node3D, node_name: String, center: Vector2, rotation_y: float, material: Material) -> void:
+	_add_siege_box(parent, "%sLowerBeam" % node_name, center, Vector3(8.5, 0.48, 0.72), material, rotation_y, 0.45)
+	_add_siege_box(parent, "%sUpperBeam" % node_name, center + Vector2(0.0, -0.28), Vector3(7.2, 0.42, 0.58), material, rotation_y, 1.14)
+	for index in range(5):
+		var offset := (float(index) - 2.0) * 1.55
+		var local := Vector2(cos(-rotation_y), sin(-rotation_y)) * offset
+		_add_siege_box(parent, "%sStake%d" % [node_name, index + 1], center + local, Vector3(0.36, 1.65, 0.36), material, rotation_y + deg_to_rad(9.0 if index % 2 == 0 else -9.0), 0.18)
+
+
+func _add_siege_box(parent: Node3D, node_name: String, center: Vector2, size: Vector3, material: Material, rotation_y := 0.0, y_offset := 0.0) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = node_name
+	body.position = _siege_grounded_position(center, size.y, y_offset)
+	body.rotation.y = rotation_y
+	body.collision_layer = SIEGE_STRUCTURE_COLLISION_LAYER
+	body.collision_mask = 0
+	parent.add_child(body)
+
+	var collision := CollisionShape3D.new()
+	var box_shape := BoxShape3D.new()
+	box_shape.size = size
+	collision.shape = box_shape
+	body.add_child(collision)
+
+	var mesh_instance := MeshInstance3D.new()
+	var box_mesh := BoxMesh.new()
+	box_mesh.size = size
+	mesh_instance.mesh = box_mesh
+	mesh_instance.material_override = material
+	body.add_child(mesh_instance)
+	return body
+
+
+func _add_siege_box_to_top(parent: Node3D, node_name: String, center: Vector2, footprint: Vector3, top_y: float, material: Material, rotation_y := 0.0) -> StaticBody3D:
+	var bottom_y := _terrain_height(center.x, center.y) - SIEGE_STRUCTURE_GROUND_SINK
+	return _add_siege_box_between_y(parent, node_name, center, footprint, bottom_y, top_y, material, rotation_y)
+
+
+func _add_siege_box_between_y(parent: Node3D, node_name: String, center: Vector2, footprint: Vector3, bottom_y: float, top_y: float, material: Material, rotation_y := 0.0) -> StaticBody3D:
+	var terrain_y := _terrain_height(center.x, center.y)
+	var height := maxf(0.12, top_y - bottom_y)
+	var y_offset := bottom_y - terrain_y + SIEGE_STRUCTURE_GROUND_SINK
+	return _add_siege_box(parent, node_name, center, Vector3(footprint.x, height, footprint.z), material, rotation_y, y_offset)
+
+
+func _siege_grounded_position(center: Vector2, height: float, y_offset := 0.0) -> Vector3:
+	var x := clampf(center.x, -BATTLEFIELD_WALL_HALF + 4.0, BATTLEFIELD_WALL_HALF - 4.0)
+	var z := clampf(center.y, -BATTLEFIELD_WALL_HALF + 4.0, BATTLEFIELD_WALL_HALF - 4.0)
+	return Vector3(x, _terrain_height(x, z) + y_offset + height * 0.5 - SIEGE_STRUCTURE_GROUND_SINK, z)
+
+
+func _siege_highest_terrain_on_wall_line(start: Vector2, finish: Vector2, thickness: float) -> float:
+	return _siege_terrain_extreme_on_wall_line(start, finish, thickness, true)
+
+
+func _siege_lowest_terrain_on_wall_line(start: Vector2, finish: Vector2, thickness: float) -> float:
+	return _siege_terrain_extreme_on_wall_line(start, finish, thickness, false)
+
+
+func _siege_lowest_terrain_in_circle(center: Vector2, radius: float) -> float:
+	var lowest := _terrain_height(center.x, center.y)
+	for index in range(8):
+		var angle := float(index) * TAU / 8.0
+		var sample_point := center + Vector2(cos(angle), sin(angle)) * radius
+		lowest = minf(lowest, _terrain_height(sample_point.x, sample_point.y))
+	return lowest
+
+
+func _siege_terrain_extreme_on_wall_line(start: Vector2, finish: Vector2, thickness: float, find_highest: bool) -> float:
+	var delta := finish - start
+	var length := delta.length()
+	var direction := Vector2.RIGHT
+	if length > 0.01:
+		direction = delta / length
+	var perpendicular := Vector2(-direction.y, direction.x)
+	var sample_count := maxi(1, int(ceil(length / 2.0)))
+	var extreme := -999999.0 if find_highest else 999999.0
+	for sample_index in range(sample_count + 1):
+		var ratio := float(sample_index) / float(sample_count)
+		var center := start.lerp(finish, ratio)
+		for offset_index in range(3):
+			var offset_sign := float(offset_index - 1)
+			var sample_point := center + perpendicular * thickness * 0.5 * offset_sign
+			var terrain_y := _terrain_height(sample_point.x, sample_point.y)
+			if find_highest:
+				extreme = maxf(extreme, terrain_y)
+			else:
+				extreme = minf(extreme, terrain_y)
+	return extreme
+
+
 func _add_terrain_heightmap_collision(terrain: StaticBody3D, terrain_heights: PackedFloat32Array) -> void:
 	var sample_count := TERRAIN_STEPS + 1
 	var step_size := TERRAIN_SIZE / float(TERRAIN_STEPS)
@@ -1352,15 +2053,15 @@ func _terrain_uv(x: float, z: float) -> Vector2:
 
 func _terrain_secondary_mask_at(uv: Vector2) -> float:
 	var sampled_uv := _wrap_unit_uv(uv + _combat_uv_offset)
-	var dirt_grain := smoothstep(0.48, 0.78, _value_noise((uv + _combat_uv_offset) * 18.0 + Vector2(11.0, -5.0))) * 0.30
+	var dirt_grain := smoothstep(0.52, 0.82, _value_noise((uv + _combat_uv_offset) * 18.0 + Vector2(11.0, -5.0))) * _profile_float("spot_grain_strength", 0.30)
 	var dirt_mask := dirt_grain
-	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(101, Vector2(0.25, 0.50)), Vector2(0.12, 0.08), 0.95))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(102, Vector2(0.70, 0.24)), Vector2(0.15, 0.10), 0.90))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(103, Vector2(0.28, 0.72)), Vector2(0.09, 0.12), 0.82))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(104, Vector2(0.47, 0.22)), Vector2(0.12, 0.08), 0.72))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(105, Vector2(0.60, 0.63)), Vector2(0.10, 0.13), 0.78))
-	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(106, Vector2(0.80, 0.55)), Vector2(0.08, 0.11), 0.62))
-	return clampf(smoothstep(0.08, 0.85, dirt_mask) * _profile_float("secondary_mask_strength", 0.88), 0.0, 1.0)
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(101, Vector2(0.25, 0.50)), Vector2(0.14, 0.075), 0.95))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(102, Vector2(0.70, 0.24)), Vector2(0.17, 0.095), 0.90))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(103, Vector2(0.28, 0.72)), Vector2(0.085, 0.14), 0.82))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(104, Vector2(0.47, 0.22)), Vector2(0.14, 0.075), 0.72))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(105, Vector2(0.60, 0.63)), Vector2(0.095, 0.15), 0.78))
+	dirt_mask = maxf(dirt_mask, _terrain_patch(sampled_uv, _seeded_patch_center(106, Vector2(0.80, 0.55)), Vector2(0.075, 0.12), 0.62))
+	return clampf(smoothstep(0.05, 0.78, dirt_mask) * _profile_float("secondary_mask_strength", 0.88), 0.0, 1.0)
 
 
 func _wrap_unit_uv(uv: Vector2) -> Vector2:
@@ -1374,8 +2075,14 @@ func _seeded_patch_center(salt: int, base_center: Vector2) -> Vector2:
 
 func _terrain_patch(uv: Vector2, center: Vector2, radius: Vector2, strength: float) -> float:
 	var offset := Vector2((uv.x - center.x) / radius.x, (uv.y - center.y) / radius.y)
-	var edge := _value_noise(uv * 24.0 + center * 17.0) * 0.22
-	return (1.0 - smoothstep(0.38 + edge, 1.0 + edge, offset.length())) * strength
+	var coarse_noise := _value_noise(uv * 18.0 + center * 23.0)
+	var fine_noise := _value_noise(uv * 53.0 - center * 31.0)
+	var edge := ((coarse_noise * 0.70 + fine_noise * 0.30) - 0.5) * _profile_float("spot_edge_raggedness", 0.22)
+	var body := 1.0 - smoothstep(0.50 + edge, 1.04 + edge, offset.length())
+	var breakup_noise := _value_noise(uv * 38.0 + center * 41.0)
+	var breakup := lerpf(1.0, smoothstep(0.12, 0.92, breakup_noise), _profile_float("spot_breakup_strength", 0.30))
+	var core := (1.0 - smoothstep(0.0, 0.58, offset.length())) * _profile_float("spot_core_strength", 0.18)
+	return clampf((body * breakup + core) * strength, 0.0, 1.0)
 
 
 func _value_noise(point: Vector2) -> float:
@@ -1434,6 +2141,18 @@ func _add_wadis() -> void:
 
 
 func _add_path() -> void:
+	if _path_points.size() < 2:
+		return
+
+	var path_width := _profile_float("path_width", 2.4)
+	var sampled_points := _sample_path_points(_path_points, 1.35)
+	_register_decoration_exclusion_corridor(sampled_points, path_width * 0.5 + 0.45)
+
+
+func _prepare_path_points() -> void:
+	if _path_points.size() >= 2:
+		return
+
 	var path_shift := Vector3(_combat_decoration_offset.x, 0.0, _combat_decoration_offset.y)
 	var path_width := _profile_float("path_width", 2.4)
 	var raw_path_points := [
@@ -1448,9 +2167,7 @@ func _add_path() -> void:
 	for raw_point in raw_path_points:
 		var ground_position := _wrap_ground_position_to_terrain(Vector2(raw_point.x, raw_point.z), path_width)
 		path_points.append(Vector3(ground_position.x, 0.0, ground_position.y))
-	var sampled_points := _sample_path_points(path_points, 1.35)
-	_register_decoration_exclusion_corridor(sampled_points, path_width * 0.5 + 0.45)
-	_add_path_ribbon(sampled_points, path_width)
+	_path_points = path_points
 
 
 func _sample_path_points(path_points: Array, spacing: float) -> Array[Vector3]:
@@ -1472,10 +2189,6 @@ func _sample_path_points(path_points: Array, spacing: float) -> Array[Vector3]:
 	final_point.y = _terrain_height(final_point.x, final_point.z) + 0.095
 	sampled.append(final_point)
 	return sampled
-
-
-func _add_path_ribbon(path_points: Array[Vector3], width: float) -> void:
-	_add_surface_ribbon("TerrainFollowingPath", path_points, width, _profile_color("path_color", PATH_COLOR))
 
 
 func _add_surface_ribbon(node_name: String, path_points: Array[Vector3], width: float, color: Color) -> void:
@@ -1789,21 +2502,53 @@ func _add_target(position: Vector3) -> void:
 	add_child(target)
 
 
-func _add_soldier(position: Vector3, faction: String, weapon_type: String, power: int, speed: int, dexterity: int) -> CharacterBody3D:
+func _add_soldier(position: Vector3, faction: String, weapon_type: String, power: int, speed: int, dexterity: int, visual_variant := "") -> CharacterBody3D:
 	var soldier := CharacterBody3D.new()
 	var side := "Friendly" if faction == "friendly" else "Enemy"
-	var role := "Archer" if weapon_type == "bow" else "Swordsman"
+	var role := _soldier_role_name(weapon_type, visual_variant)
 	soldier.name = "%s%s" % [side, role]
 	soldier.set_script(SoldierEnemy)
 	soldier.position = position
 	soldier.rotation.y = PI if faction == "enemy" else 0.0
-	soldier.call("setup", player, self, weapon_type, false, faction, power, speed, dexterity)
+	soldier.call("setup", player, self, weapon_type, false, faction, power, speed, dexterity, visual_variant)
 	if _is_lord_combat() and soldier.has_signal("died"):
 		soldier.connect("died", Callable(self, "_on_combat_soldier_died").bind(soldier))
 	if _is_lord_combat() and soldier.has_signal("left_battlefield"):
 		soldier.connect("left_battlefield", Callable(self, "_on_combat_soldier_left_battlefield").bind(soldier))
 	add_child(soldier)
 	return soldier
+
+
+func _add_predator(position: Vector3) -> CharacterBody3D:
+	var predator := CharacterBody3D.new()
+	predator.name = "WildWolf"
+	predator.set_script(CombatPredator)
+	predator.position = position
+	predator.rotation.y = PI
+	predator.call("setup", player, self)
+	add_child(predator)
+	return predator
+
+
+func _add_sheep(position: Vector3, yaw := 0.0) -> CharacterBody3D:
+	var sheep := CharacterBody3D.new()
+	sheep.name = "FriendlySheep"
+	sheep.set_script(CombatLivestock)
+	sheep.position = position
+	sheep.rotation.y = yaw
+	sheep.call("setup", self)
+	add_child(sheep)
+	return sheep
+
+
+func _soldier_role_name(weapon_type: String, visual_variant: String) -> String:
+	if visual_variant == "philistine_champion":
+		return "PhilistineChampion"
+	if visual_variant == "philistine_giant":
+		return "PhilistineGiant"
+	if visual_variant == "philistine_brute":
+		return "PhilistineBrute"
+	return "Archer" if weapon_type == "bow" else "Swordsman"
 
 
 func _make_battlefield_wall_material() -> ShaderMaterial:
@@ -1859,6 +2604,7 @@ uniform sampler2D stone_albedo : source_color, repeat_enable, filter_linear_mipm
 uniform sampler2D stone_height : repeat_enable, filter_linear_mipmap;
 uniform vec4 rock_tint : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform float stone_tile = 0.215;
+uniform float rock_roughness = 0.96;
 
 varying vec3 stone_pos;
 varying vec3 stone_normal;
@@ -1889,16 +2635,17 @@ void fragment() {
 	float object_variation = hash31(floor(stone_pos * 3.0));
 
 	ALBEDO = color * rock_tint.rgb * (0.78 + height_mix * 0.28 + object_variation * 0.04);
-	ROUGHNESS = 0.96;
+	ROUGHNESS = rock_roughness;
 }
 """
 
 	_stone_material = ShaderMaterial.new()
 	_stone_material.shader = shader
-	_stone_material.set_shader_parameter("stone_albedo", StoneAlbedo)
-	_stone_material.set_shader_parameter("stone_height", StoneHeight)
+	_stone_material.set_shader_parameter("stone_albedo", _profile_texture("rock_albedo_path", StoneAlbedo))
+	_stone_material.set_shader_parameter("stone_height", _profile_texture("rock_height_path", StoneHeight))
 	_stone_material.set_shader_parameter("rock_tint", _profile_color("rock_color", Color.WHITE))
-	_stone_material.set_shader_parameter("stone_tile", 0.215)
+	_stone_material.set_shader_parameter("stone_tile", _profile_float("rock_texture_tile", 0.215))
+	_stone_material.set_shader_parameter("rock_roughness", _profile_float("rock_roughness", 0.96))
 	return _stone_material
 
 
@@ -1912,15 +2659,36 @@ uniform sampler2D primary_albedo : source_color, repeat_enable, filter_linear_mi
 uniform sampler2D primary_height : repeat_enable, filter_linear_mipmap;
 uniform sampler2D secondary_albedo : source_color, repeat_enable, filter_linear_mipmap;
 uniform sampler2D secondary_height : repeat_enable, filter_linear_mipmap;
+uniform sampler2D path_albedo : source_color, repeat_enable, filter_linear_mipmap;
+uniform sampler2D path_height : repeat_enable, filter_linear_mipmap;
 uniform vec4 primary_tint : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform vec4 secondary_tint : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+uniform vec4 path_tint : source_color = vec4(1.0, 0.92, 0.74, 1.0);
 uniform float detail_tile = 7.33;
 uniform float secondary_tile_scale = 1.2;
+uniform float path_tile_scale = 0.92;
 uniform float secondary_mask_strength = 0.88;
 uniform float roughness_primary = 0.94;
 uniform float roughness_secondary = 0.98;
+uniform float roughness_path = 0.97;
 uniform float normal_depth = 0.55;
+uniform float spot_edge_raggedness = 0.22;
+uniform float spot_breakup_strength = 0.30;
+uniform float spot_grain_strength = 0.30;
+uniform float spot_core_strength = 0.18;
 uniform vec2 map_uv_offset = vec2(0.0, 0.0);
+uniform float path_width_uv = 0.014;
+uniform float path_feather_uv = 0.010;
+uniform float path_edge_noise = 0.003;
+uniform int path_segment_count = 0;
+uniform vec4 path_segment_1 = vec4(0.0);
+uniform vec4 path_segment_2 = vec4(0.0);
+uniform vec4 path_segment_3 = vec4(0.0);
+uniform vec4 path_segment_4 = vec4(0.0);
+uniform vec4 path_segment_5 = vec4(0.0);
+uniform vec4 path_segment_6 = vec4(0.0);
+uniform vec4 path_segment_7 = vec4(0.0);
+uniform vec4 path_segment_8 = vec4(0.0);
 uniform vec2 patch_center_1 = vec2(0.25, 0.50);
 uniform vec2 patch_center_2 = vec2(0.70, 0.24);
 uniform vec2 patch_center_3 = vec2(0.28, 0.72);
@@ -1943,24 +2711,58 @@ float value_noise(vec2 p) {
 	return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
-float patch(vec2 uv, vec2 center, vec2 radius, float strength) {
+float spot_patch(vec2 uv, vec2 center, vec2 radius, float strength) {
 	vec2 p = (uv - center) / radius;
 	float d = length(p);
-	float edge = value_noise(uv * 24.0 + center * 17.0) * 0.22;
-	return (1.0 - smoothstep(0.38 + edge, 1.0 + edge, d)) * strength;
+	float coarse_noise = value_noise(uv * 18.0 + center * 23.0);
+	float fine_noise = value_noise(uv * 53.0 - center * 31.0);
+	float edge = ((coarse_noise * 0.70 + fine_noise * 0.30) - 0.5) * spot_edge_raggedness;
+	float body = 1.0 - smoothstep(0.50 + edge, 1.04 + edge, d);
+	float breakup_noise = value_noise(uv * 38.0 + center * 41.0);
+	float breakup = mix(1.0, smoothstep(0.12, 0.92, breakup_noise), spot_breakup_strength);
+	float core = (1.0 - smoothstep(0.0, 0.58, d)) * spot_core_strength;
+	return clamp((body * breakup + core) * strength, 0.0, 1.0);
 }
 
 float secondary_mask_at(vec2 map_uv) {
 	vec2 wrapped_uv = fract(map_uv);
-	float dirt_grain = smoothstep(0.48, 0.78, value_noise(map_uv * 18.0 + vec2(11.0, -5.0))) * 0.30;
+	float dirt_grain = smoothstep(0.52, 0.82, value_noise(map_uv * 18.0 + vec2(11.0, -5.0))) * spot_grain_strength;
 	float dirt_mask = dirt_grain;
-	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_1, vec2(0.12, 0.08), 0.95));
-	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_2, vec2(0.15, 0.10), 0.90));
-	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_3, vec2(0.09, 0.12), 0.82));
-	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_4, vec2(0.12, 0.08), 0.72));
-	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_5, vec2(0.10, 0.13), 0.78));
-	dirt_mask = max(dirt_mask, patch(wrapped_uv, patch_center_6, vec2(0.08, 0.11), 0.62));
-	return clamp(smoothstep(0.08, 0.85, dirt_mask) * secondary_mask_strength, 0.0, 1.0);
+	dirt_mask = max(dirt_mask, spot_patch(wrapped_uv, patch_center_1, vec2(0.14, 0.075), 0.95));
+	dirt_mask = max(dirt_mask, spot_patch(wrapped_uv, patch_center_2, vec2(0.17, 0.095), 0.90));
+	dirt_mask = max(dirt_mask, spot_patch(wrapped_uv, patch_center_3, vec2(0.085, 0.14), 0.82));
+	dirt_mask = max(dirt_mask, spot_patch(wrapped_uv, patch_center_4, vec2(0.14, 0.075), 0.72));
+	dirt_mask = max(dirt_mask, spot_patch(wrapped_uv, patch_center_5, vec2(0.095, 0.15), 0.78));
+	dirt_mask = max(dirt_mask, spot_patch(wrapped_uv, patch_center_6, vec2(0.075, 0.12), 0.62));
+	return clamp(smoothstep(0.05, 0.78, dirt_mask) * secondary_mask_strength, 0.0, 1.0);
+}
+
+float distance_to_segment(vec2 point, vec4 segment) {
+	vec2 start = segment.xy;
+	vec2 finish = segment.zw;
+	vec2 line = finish - start;
+	float t = clamp(dot(point - start, line) / max(dot(line, line), 0.000001), 0.0, 1.0);
+	return distance(point, start + line * t);
+}
+
+float path_mask_at(vec2 map_uv) {
+	if (path_segment_count <= 0) {
+		return 0.0;
+	}
+
+	float nearest = 10.0;
+	if (path_segment_count >= 1) { nearest = min(nearest, distance_to_segment(map_uv, path_segment_1)); }
+	if (path_segment_count >= 2) { nearest = min(nearest, distance_to_segment(map_uv, path_segment_2)); }
+	if (path_segment_count >= 3) { nearest = min(nearest, distance_to_segment(map_uv, path_segment_3)); }
+	if (path_segment_count >= 4) { nearest = min(nearest, distance_to_segment(map_uv, path_segment_4)); }
+	if (path_segment_count >= 5) { nearest = min(nearest, distance_to_segment(map_uv, path_segment_5)); }
+	if (path_segment_count >= 6) { nearest = min(nearest, distance_to_segment(map_uv, path_segment_6)); }
+	if (path_segment_count >= 7) { nearest = min(nearest, distance_to_segment(map_uv, path_segment_7)); }
+	if (path_segment_count >= 8) { nearest = min(nearest, distance_to_segment(map_uv, path_segment_8)); }
+
+	float ragged_edge = (value_noise(map_uv * 86.0 + vec2(19.0, 41.0)) - 0.5) * path_edge_noise;
+	float mask = 1.0 - smoothstep(path_width_uv * 0.5 - path_feather_uv, path_width_uv * 0.5 + path_feather_uv, nearest + ragged_edge);
+	return clamp(mask, 0.0, 1.0);
 }
 
 void fragment() {
@@ -1968,25 +2770,33 @@ void fragment() {
 	vec2 detail_uv = UV * detail_tile + map_uv_offset * 18.0;
 
 	float secondary_mask = secondary_mask_at(map_uv);
+	float path_mask = path_mask_at(UV);
 	vec2 secondary_uv = detail_uv * secondary_tile_scale;
+	vec2 path_uv = detail_uv * path_tile_scale;
 	vec3 primary = texture(primary_albedo, detail_uv).rgb * primary_tint.rgb;
 	vec3 secondary = texture(secondary_albedo, secondary_uv).rgb * secondary_tint.rgb;
+	vec3 path = texture(path_albedo, path_uv).rgb * path_tint.rgb;
 
 	vec3 color = mix(primary, secondary, secondary_mask * 0.94);
+	color = mix(color, path, path_mask);
 	color *= 0.97 + value_noise(detail_uv * 26.0) * 0.06;
 
 	vec2 bump_step = vec2(0.018, 0.0);
 	float primary_h = texture(primary_height, detail_uv).r;
 	float secondary_h = texture(secondary_height, secondary_uv).r;
+	float path_h = texture(path_height, path_uv).r;
 	float h = mix(primary_h, secondary_h, secondary_mask);
+	h = mix(h, path_h, path_mask);
 	float hx = mix(texture(primary_height, detail_uv + bump_step.xy).r, texture(secondary_height, secondary_uv + bump_step.xy).r, secondary_mask);
+	hx = mix(hx, texture(path_height, path_uv + bump_step.xy).r, path_mask);
 	float hy = mix(texture(primary_height, detail_uv + bump_step.yx).r, texture(secondary_height, secondary_uv + bump_step.yx).r, secondary_mask);
+	hy = mix(hy, texture(path_height, path_uv + bump_step.yx).r, path_mask);
 	vec3 normal_sample = normalize(vec3((h - hx) * 2.2, (h - hy) * 2.2, 1.0));
 
 	ALBEDO = color;
 	NORMAL_MAP = normal_sample * 0.5 + 0.5;
 	NORMAL_MAP_DEPTH = normal_depth;
-	ROUGHNESS = mix(roughness_primary, roughness_secondary, secondary_mask);
+	ROUGHNESS = mix(mix(roughness_primary, roughness_secondary, secondary_mask), roughness_path, path_mask);
 }
 """
 
@@ -1996,21 +2806,58 @@ void fragment() {
 	material.set_shader_parameter("primary_height", _profile_texture("primary_height_path", TerrainGrassHeight))
 	material.set_shader_parameter("secondary_albedo", _profile_texture("secondary_albedo_path", TerrainDirtAlbedo))
 	material.set_shader_parameter("secondary_height", _profile_texture("secondary_height_path", TerrainDirtHeight))
+	material.set_shader_parameter("path_albedo", _profile_texture("path_albedo_path", PathSandAlbedo))
+	material.set_shader_parameter("path_height", _profile_texture("path_height_path", PathSandHeight))
 	material.set_shader_parameter("primary_tint", _profile_color("primary_tint", Color.WHITE))
 	material.set_shader_parameter("secondary_tint", _profile_color("secondary_tint", Color.WHITE))
+	material.set_shader_parameter("path_tint", _profile_color("path_tint", _profile_color("path_color", PATH_COLOR)))
 	material.set_shader_parameter("detail_tile", _profile_float("detail_tile", 7.33))
 	material.set_shader_parameter("secondary_tile_scale", _profile_float("secondary_tile_scale", 1.2))
+	material.set_shader_parameter("path_tile_scale", _profile_float("path_tile_scale", 0.92))
 	material.set_shader_parameter("secondary_mask_strength", _profile_float("secondary_mask_strength", 0.88))
 	material.set_shader_parameter("roughness_primary", _profile_float("roughness_primary", 0.94))
 	material.set_shader_parameter("roughness_secondary", _profile_float("roughness_secondary", 0.98))
+	material.set_shader_parameter("roughness_path", _profile_float("roughness_path", 0.97))
 	material.set_shader_parameter("normal_depth", _profile_float("normal_depth", 0.55))
+	material.set_shader_parameter("spot_edge_raggedness", _profile_float("spot_edge_raggedness", 0.22))
+	material.set_shader_parameter("spot_breakup_strength", _profile_float("spot_breakup_strength", 0.30))
+	material.set_shader_parameter("spot_grain_strength", _profile_float("spot_grain_strength", 0.30))
+	material.set_shader_parameter("spot_core_strength", _profile_float("spot_core_strength", 0.18))
 	material.set_shader_parameter("map_uv_offset", _combat_uv_offset)
+	material.set_shader_parameter("path_width_uv", _profile_float("path_width", 2.4) / TERRAIN_SIZE)
+	material.set_shader_parameter("path_feather_uv", _profile_float("path_feather", 1.25) / TERRAIN_SIZE)
+	material.set_shader_parameter("path_edge_noise", _profile_float("path_edge_noise", 0.55) / TERRAIN_SIZE)
+	_apply_path_shader_parameters(material)
 	material.set_shader_parameter("patch_center_1", _seeded_patch_center(101, Vector2(0.25, 0.50)))
 	material.set_shader_parameter("patch_center_2", _seeded_patch_center(102, Vector2(0.70, 0.24)))
 	material.set_shader_parameter("patch_center_3", _seeded_patch_center(103, Vector2(0.28, 0.72)))
 	material.set_shader_parameter("patch_center_4", _seeded_patch_center(104, Vector2(0.47, 0.22)))
 	material.set_shader_parameter("patch_center_5", _seeded_patch_center(105, Vector2(0.60, 0.63)))
 	material.set_shader_parameter("patch_center_6", _seeded_patch_center(106, Vector2(0.80, 0.55)))
+	return material
+
+
+func _apply_path_shader_parameters(material: ShaderMaterial) -> void:
+	var segment_count := mini(_path_points.size() - 1, 8)
+	material.set_shader_parameter("path_segment_count", segment_count)
+	for index in range(8):
+		var parameter_name := "path_segment_%d" % (index + 1)
+		if index >= segment_count:
+			material.set_shader_parameter(parameter_name, Vector4.ZERO)
+			continue
+
+		var start := _terrain_uv(_path_points[index].x, _path_points[index].z)
+		var finish := _terrain_uv(_path_points[index + 1].x, _path_points[index + 1].z)
+		material.set_shader_parameter(parameter_name, Vector4(start.x, start.y, finish.x, finish.y))
+
+
+func _make_siege_gate_door_material() -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color("#cda87a")
+	material.roughness = 0.94
+	var texture := ResourceLoader.load(SIEGE_GATE_DOOR_ALBEDO_PATH, "Texture2D") as Texture2D
+	if texture != null:
+		material.albedo_texture = texture
 	return material
 
 

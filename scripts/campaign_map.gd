@@ -156,6 +156,7 @@ const SETTLEMENTS := [
 	{"name": "Hebron", "pos": Vector2(-8, 630), "kind": "Judah stronghold"},
 	{"name": "Keilah", "pos": Vector2(-168, 390), "kind": "Border town"},
 	{"name": "Socoh", "pos": Vector2(-230, 235), "kind": "Valley town"},
+	{"name": "Adullam", "pos": Vector2(-205, 285), "kind": "Cave refuge"},
 	{"name": "Ziklag", "pos": Vector2(-265, 820), "kind": "David's refuge"},
 	{"name": "En-gedi", "pos": Vector2(338, 545), "kind": "Wilderness spring"},
 	{"name": "Gath", "pos": Vector2(-448, 182), "kind": "Philistine city"},
@@ -306,7 +307,7 @@ const ROADS := [
 	[Vector2(-448, 182), Vector2(-230, 235), Vector2(28, 258), Vector2(102, 58), Vector2(42, -172), Vector2(88, -562)],
 	[Vector2(28, 258), Vector2(-8, 630), Vector2(-265, 820)],
 	[Vector2(102, 58), Vector2(338, 545)],
-	[Vector2(-230, 235), Vector2(-168, 390), Vector2(-8, 630)]
+	[Vector2(-230, 235), Vector2(-205, 285), Vector2(-168, 390), Vector2(-8, 630)]
 ]
 
 var _font: Font
@@ -702,12 +703,43 @@ func get_click_target(world_position: Vector2, radius: float = 42.0) -> Dictiona
 	return best
 
 
+func get_primary_story_target() -> Dictionary:
+	var active_quest := GameState.get_active_main_story_quest()
+	if not active_quest.is_empty():
+		var target := _story_target_for_quest(active_quest, false)
+		if not target.is_empty():
+			return target
+
+	for optional_quest in GameState.get_available_optional_story_quests():
+		var target := _story_target_for_quest(optional_quest, true)
+		if not target.is_empty():
+			return target
+
+	return {}
+
+
 func get_lord_target(lord_name: String) -> Dictionary:
 	for lord in _lord_parties:
 		if String(lord.get("name", "")) == lord_name:
 			if _is_lord_absorbed(lord):
 				return {}
 			return _target_from_lord(lord)
+	return {}
+
+
+func _story_target_for_quest(quest: Dictionary, optional: bool) -> Dictionary:
+	for raw_name in Array(quest.get("target_names", [])):
+		var target_name := String(raw_name)
+		for settlement in _settlements_for_gameplay():
+			if String(settlement.get("name", "")) != target_name:
+				continue
+			return {
+				"name": target_name,
+				"title": String(quest.get("title", "Quest")),
+				"quest_id": String(quest.get("id", "")),
+				"optional": optional,
+				"pos": _map_position_from_entry(settlement)
+			}
 	return {}
 
 
@@ -990,6 +1022,8 @@ func _draw_settlements() -> void:
 		draw_circle(pos, 7.4 * s * marker_scale, ring)
 		draw_circle(pos, marker_radius, fill)
 		draw_circle(pos + Vector2(-2.0 * s * marker_scale, -2.0 * s * marker_scale), 2.0 * s * marker_scale, fill.lightened(0.55))
+		if GameState.is_active_story_location(String(settlement.get("name", ""))):
+			_draw_story_marker(pos, marker_scale, s, GameState.is_optional_story_location(String(settlement.get("name", ""))))
 		var absorbed_lord_count := _absorbed_lords_at_settlement(String(settlement.get("name", ""))).size()
 		if absorbed_lord_count > 0:
 			_draw_lord_presence_badge(pos + Vector2(13.0 * s * marker_scale, -13.0 * s * marker_scale), absorbed_lord_count, s)
@@ -1114,6 +1148,24 @@ func _draw_lord_presence_badge(position: Vector2, count: int, scale: float = 1.0
 		var text_color := Color("#2b1d12")
 		text_color.a = alpha
 		draw_string(_font, text_position, label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, text_color)
+
+
+func _draw_story_marker(position: Vector2, marker_scale: float, ui_scale: float, optional: bool) -> void:
+	var radius := 18.0 * ui_scale * marker_scale
+	var glow := Color("#ffd36f")
+	glow.a = 0.22 if optional else 0.34
+	var edge := Color("#ffe7a2") if not optional else Color("#d8efd0")
+	var fill := Color("#7e4f16") if not optional else Color("#3f6f4a")
+	draw_circle(position, radius + 8.0 * ui_scale, glow)
+	draw_arc(position, radius, 0.0, TAU, 36, edge, 3.0 * ui_scale, true)
+	var diamond := PackedVector2Array([
+		position + Vector2(0.0, -radius * 0.82),
+		position + Vector2(radius * 0.82, 0.0),
+		position + Vector2(0.0, radius * 0.82),
+		position + Vector2(-radius * 0.82, 0.0)
+	])
+	draw_colored_polygon(diamond, fill)
+	draw_polyline(PackedVector2Array([diamond[0], diamond[1], diamond[2], diamond[3], diamond[0]]), edge, 2.0 * ui_scale, true)
 
 
 func _draw_frame() -> void:

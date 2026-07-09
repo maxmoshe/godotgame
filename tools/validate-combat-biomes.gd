@@ -57,3 +57,10 @@ func _validate_profile_textures(profile: Dictionary, failures: Array[String]) ->
 			continue
 		if not FileAccess.file_exists(path):
 			failures.append("Profile %d missing %s: %s" % [int(profile.get("biome_id", 0)), key, path])
+
+	for key in ["path_albedo_path", "path_height_path", "rock_albedo_path", "rock_height_path"]:
+		var path := String(profile.get(key, ""))
+		if path.is_empty():
+			continue
+		if not FileAccess.file_exists(path):
+			failures.append("Profile %d missing optional %s: %s" % [int(profile.get("biome_id", 0)), key, path])

@@ -322,6 +322,40 @@
     },
     {
       "type": "Feature",
+      "id": "adullam",
+      "properties": {
+        "name": "Adullam",
+        "kind": "Cave refuge",
+        "era_tags": [
+          "iron_age"
+        ],
+        "owner_faction": "Judah",
+        "confidence": "medium",
+        "supply_value": 2,
+        "water_access": 2,
+        "defense_bonus": 4,
+        "settlement_density": 1,
+        "notes": "Traditional cave-refuge region in the Judah-Shephelah borderland, associated with David gathering his early band.",
+        "settlement_class": "cave_refuge",
+        "site_role": [
+          "refuge",
+          "band_gathering",
+          "shephelah_hideout"
+        ],
+        "fortification_level": 2,
+        "classification_confidence": "medium",
+        "location_class_label": "Cave Refuge"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          34.98,
+          31.65
+        ]
+      }
+    },
+    {
+      "type": "Feature",
       "id": "lachish",
       "properties": {
         "name": "Lachish",

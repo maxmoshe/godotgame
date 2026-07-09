@@ -50,8 +50,10 @@ The layer manifest is `data/maps/southern_levant/map_manifest.json`. Physical ge
 ## 3D Sling Test
 
 The combat test is currently stripped back to a Bethlehem-style Judean hill-country terrain, a dirt path, sling targets, and scattered stones. Earlier placeholder sheep, grass tufts, trees, terraces, blocks, clouds, and other props were removed until better art is ready.
-The ground uses a terrain shader that blends downloaded rocky-grass and gravel textures directly on the terrain surface. Larger dirt depressions are also built into the terrain height, keeping color and relief aligned without slow load-time texture generation.
-Pebbles and larger rocks use reusable scatter logic with path exclusion zones, so stones and future props can avoid paths or other reserved spaces. The stones use the marble diffuse and displacement textures from `assets/textures/terrain/marble`; the EXR normal/roughness maps are present but not wired because the WSL startup check could not load EXR resources.
+The ground uses a terrain shader that blends generated Bethlehem/Shephelah ground, scrub-spot, and compacted-path textures directly on the terrain surface. Larger dirt depressions are also built into the terrain height, keeping color and relief aligned without slow load-time texture generation.
+Pebbles and larger rocks use reusable scatter logic with path exclusion zones, so stones and future props can avoid paths or other reserved spaces. Biome profiles can provide rock albedo/height textures for generated rocks, with older terrain textures kept as fallbacks.
+
+Terrain texture generation notes live in `docs/terrain-texture-generation.md`.
 
 - `WASD`: move
 - `Space`: jump

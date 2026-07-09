@@ -1,0 +1,6 @@
+[gd_scene format=3 uid="uid://cjsifjkpmcc50"]
+
+[ext_resource type="Script" path="res://scripts/quaternius_weapon_socket_tuner.gd" id="1_tuner"]
+
+[node name="QuaterniusWeaponSocketTuner" type="Node3D" unique_id=1731007316]
+script = ExtResource("1_tuner")

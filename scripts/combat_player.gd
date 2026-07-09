@@ -21,6 +21,8 @@ const AIM_ZOOM_MULTIPLIER := 1.5
 const CAMERA_ZOOM_LERP_SPEED := 14.0
 const BACKPEDAL_SPEED_DIVISOR := 2.0
 const STRAFE_SPEED_DIVISOR := 1.3
+const CROUCH_TOGGLE_KEY := KEY_C
+const CROUCH_HOLD_KEY := KEY_CTRL
 
 @export var move_speed := 6.0
 @export var sprint_multiplier := 1.45
@@ -28,6 +30,16 @@ const STRAFE_SPEED_DIVISOR := 1.3
 @export var gravity := 20.0
 @export var air_control_acceleration := 2.2
 @export var charging_move_multiplier := 0.45
+@export var crouch_move_multiplier := 0.52
+@export var crouch_collision_height := 1.15
+@export var crouch_camera_height := 1.05
+@export var crouch_transition_speed := 11.0
+@export var crouch_slide_min_slope := 0.035
+@export var crouch_slide_full_slope := 0.18
+@export var crouch_slide_acceleration := 32.0
+@export var crouch_slide_max_speed := 14.0
+@export var crouch_slide_brake := 10.0
+@export var crouch_slide_steering_multiplier := 0.22
 @export var mouse_sensitivity := 0.0025
 @export var min_throw_speed := 13.0
 @export var max_throw_speed := 45.0
@@ -39,6 +51,7 @@ const STRAFE_SPEED_DIVISOR := 1.3
 @onready var camera: Camera3D = $CameraPivot/Camera3D
 @onready var sling_hand: Marker3D = $SlingHand
 @onready var body_mesh: MeshInstance3D = $BodyMesh
+@onready var collision_shape: CollisionShape3D = $CollisionShape3D
 
 var aiming := false
 var charging := false
@@ -62,6 +75,17 @@ var health := max_health
 var last_damage_taken := 0
 var damage_flash_time := 0.0
 var _damage_invulnerability_time := 0.0
+var _crouch_toggled := false
+var _sliding := false
+var _crouch_slide_velocity := Vector3.ZERO
+var _crouch_slide_direction := Vector3.ZERO
+var _body_shape: CapsuleShape3D
+var _body_mesh_shape: CapsuleMesh
+var _standing_collision_height := 1.8
+var _standing_collision_y := 0.9
+var _standing_camera_position := Vector3.ZERO
+var _standing_sling_hand_position := Vector3.ZERO
+var _standing_body_mesh_y := 0.9
 
 
 func _ready() -> void:
@@ -69,6 +93,7 @@ func _ready() -> void:
 	camera.fov = BASE_CAMERA_FOV
 	body_mesh.visible = false
 	health = max_health
+	_capture_standing_height()
 	_build_sling_view_model()
 	_apply_camera_rotation()
 	_update_sling_view_model(0.0)
@@ -84,6 +109,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		yaw -= mouse_motion.relative.x * mouse_sensitivity
 		pitch = clampf(pitch - mouse_motion.relative.y * mouse_sensitivity, LOOK_GROUND_LIMIT, LOOK_SKY_LIMIT)
 		_apply_camera_rotation()
+		return
+
+	var key_event := event as InputEventKey
+	if key_event != null:
+		if key_event.pressed and not key_event.echo and _is_crouch_toggle_event(key_event):
+			_crouch_toggled = not _crouch_toggled
 		return
 
 	var mouse_button := event as InputEventMouseButton
@@ -122,6 +153,13 @@ func _physics_process(delta: float) -> void:
 		charge_time = minf(charge_time + delta, max_charge_time)
 
 	var grounded := is_on_floor()
+	var jump_pressed := grounded and Input.is_key_pressed(KEY_SPACE)
+	if jump_pressed:
+		_crouch_toggled = false
+	var crouching := is_crouching()
+	var was_sliding := _sliding
+	var previous_flat_velocity := Vector3(velocity.x, 0.0, velocity.z)
+	_update_crouch_height(delta, crouching)
 	var input_vector := _movement_input()
 	var adjusted_input := _adjusted_local_movement(input_vector)
 	var forward := -global_transform.basis.z
@@ -130,17 +168,25 @@ func _physics_process(delta: float) -> void:
 	var speed := move_speed
 	if charging or sling_release_queued:
 		speed *= charging_move_multiplier
-	elif grounded and Input.is_key_pressed(KEY_SHIFT):
+	if crouching:
+		speed *= crouch_move_multiplier
+	elif grounded and not was_sliding and Input.is_key_pressed(KEY_SHIFT):
 		speed *= sprint_multiplier
 
 	if grounded:
-		velocity.x = direction.x * speed
-		velocity.z = direction.z * speed
-		if Input.is_key_pressed(KEY_SPACE):
+		var drive_velocity := direction * speed
+		_update_crouch_slide_velocity(delta, crouching, previous_flat_velocity)
+		if crouching and _crouch_slide_direction != Vector3.ZERO:
+			drive_velocity = _slide_limited_drive_velocity(drive_velocity)
+		var flat_velocity := drive_velocity + _crouch_slide_velocity
+		velocity.x = flat_velocity.x
+		velocity.z = flat_velocity.z
+		if jump_pressed:
 			velocity.y = jump_velocity
 		else:
 			velocity.y = -0.1
 	else:
+		_sliding = false
 		velocity.x = move_toward(velocity.x, direction.x * speed, air_control_acceleration * delta)
 		velocity.z = move_toward(velocity.z, direction.z * speed, air_control_acceleration * delta)
 		velocity.y -= gravity * delta
@@ -158,6 +204,14 @@ func get_charge_ratio() -> float:
 
 func is_release_queued() -> bool:
 	return sling_release_queued
+
+
+func is_crouching() -> bool:
+	return _crouch_toggled or Input.is_key_pressed(CROUCH_HOLD_KEY)
+
+
+func is_sliding() -> bool:
+	return _sliding
 
 
 func take_damage(damage: int, source_position := Vector3.ZERO) -> void:
@@ -205,6 +259,137 @@ func _adjusted_local_movement(input_vector: Vector2) -> Vector2:
 	if adjusted.y < 0.0:
 		adjusted.y /= BACKPEDAL_SPEED_DIVISOR
 	return adjusted
+
+
+func _is_crouch_toggle_event(key_event: InputEventKey) -> bool:
+	return key_event.keycode == CROUCH_TOGGLE_KEY or key_event.physical_keycode == CROUCH_TOGGLE_KEY
+
+
+func _capture_standing_height() -> void:
+	_standing_camera_position = camera_pivot.position
+	_standing_sling_hand_position = sling_hand.position
+	if collision_shape != null:
+		_standing_collision_y = collision_shape.position.y
+		_body_shape = collision_shape.shape as CapsuleShape3D
+		if _body_shape != null:
+			_body_shape = _body_shape.duplicate() as CapsuleShape3D
+			collision_shape.shape = _body_shape
+			_standing_collision_height = _body_shape.height
+	if body_mesh != null:
+		_standing_body_mesh_y = body_mesh.position.y
+		_body_mesh_shape = body_mesh.mesh as CapsuleMesh
+		if _body_mesh_shape != null:
+			_body_mesh_shape = _body_mesh_shape.duplicate() as CapsuleMesh
+			body_mesh.mesh = _body_mesh_shape
+
+
+func _update_crouch_height(delta: float, crouching: bool) -> void:
+	if collision_shape == null or camera_pivot == null:
+		return
+
+	var target_collision_height := _standing_collision_height
+	var target_camera_y := _standing_camera_position.y
+	if crouching:
+		target_collision_height = minf(crouch_collision_height, _standing_collision_height)
+		target_camera_y = minf(crouch_camera_height, _standing_camera_position.y)
+
+	var weight := clampf(crouch_transition_speed * delta, 0.0, 1.0)
+	var current_collision_height := _standing_collision_height
+	if _body_shape != null:
+		current_collision_height = _body_shape.height
+	var new_collision_height := lerpf(current_collision_height, target_collision_height, weight)
+	var height_ratio := new_collision_height / maxf(_standing_collision_height, 0.01)
+	var target_collision_y := _standing_collision_y * height_ratio
+
+	if _body_shape != null:
+		_body_shape.height = new_collision_height
+	collision_shape.position.y = lerpf(collision_shape.position.y, target_collision_y, weight)
+
+	var camera_position := camera_pivot.position
+	camera_position.y = lerpf(camera_position.y, target_camera_y, weight)
+	camera_pivot.position = camera_position
+
+	var camera_drop := _standing_camera_position.y - camera_pivot.position.y
+	sling_hand.position = _standing_sling_hand_position - Vector3(0.0, camera_drop, 0.0)
+	if body_mesh != null:
+		var body_position := body_mesh.position
+		body_position.y = lerpf(body_position.y, _standing_body_mesh_y * height_ratio, weight)
+		body_mesh.position = body_position
+	if _body_mesh_shape != null:
+		_body_mesh_shape.height = new_collision_height
+
+
+func _update_crouch_slide_velocity(delta: float, crouching: bool, previous_flat_velocity: Vector3) -> void:
+	var was_sliding := _sliding
+	_sliding = false
+	if not crouching:
+		_brake_crouch_slide(delta)
+		return
+
+	var ground_normal := _combat_terrain_normal()
+	if ground_normal == Vector3.ZERO:
+		_brake_crouch_slide(delta)
+		return
+
+	var slope := 1.0 - clampf(ground_normal.dot(Vector3.UP), 0.0, 1.0)
+	if slope < crouch_slide_min_slope:
+		_brake_crouch_slide(delta)
+		return
+
+	var downhill := Vector3.DOWN.slide(ground_normal)
+	downhill.y = 0.0
+	if downhill.length_squared() <= 0.0001:
+		_brake_crouch_slide(delta)
+		return
+
+	downhill = downhill.normalized()
+	_crouch_slide_direction = downhill
+	var slide_weight := smoothstep(crouch_slide_min_slope, crouch_slide_full_slope, slope)
+	var downhill_speed := maxf(_crouch_slide_velocity.dot(downhill), 0.0)
+	if not was_sliding:
+		downhill_speed = maxf(downhill_speed, _slide_entry_downhill_speed(previous_flat_velocity, downhill))
+	var slide_acceleration := crouch_slide_acceleration * slide_weight
+	downhill_speed += slide_acceleration * delta
+
+	var max_flat_speed := maxf(crouch_slide_max_speed, _slide_entry_downhill_speed(previous_flat_velocity, downhill))
+	downhill_speed = minf(downhill_speed, max_flat_speed)
+	_crouch_slide_velocity = downhill * downhill_speed
+
+	_sliding = slide_weight > 0.05 and downhill_speed > move_speed * crouch_move_multiplier * 0.35
+
+
+func _brake_crouch_slide(delta: float) -> void:
+	_crouch_slide_velocity = _crouch_slide_velocity.move_toward(Vector3.ZERO, crouch_slide_brake * delta)
+	if _crouch_slide_velocity.length_squared() <= 0.0001:
+		_crouch_slide_velocity = Vector3.ZERO
+		_crouch_slide_direction = Vector3.ZERO
+
+
+func _entry_downhill_speed(previous_flat_velocity: Vector3, downhill: Vector3) -> float:
+	return maxf(previous_flat_velocity.dot(downhill), 0.0)
+
+
+func _slide_entry_downhill_speed(previous_flat_velocity: Vector3, downhill: Vector3) -> float:
+	return minf(_entry_downhill_speed(previous_flat_velocity, downhill), move_speed)
+
+
+func _slide_limited_drive_velocity(drive_velocity: Vector3) -> Vector3:
+	var downhill_amount := drive_velocity.dot(_crouch_slide_direction)
+	var lateral_velocity := drive_velocity - _crouch_slide_direction * downhill_amount
+	return _crouch_slide_direction * maxf(downhill_amount, 0.0) + lateral_velocity * crouch_slide_steering_multiplier
+
+
+func _combat_terrain_normal() -> Vector3:
+	var terrain_owner := get_tree().current_scene
+	if terrain_owner != null and terrain_owner.has_method("get_combat_terrain_normal"):
+		var terrain_normal = terrain_owner.call("get_combat_terrain_normal", global_position)
+		if terrain_normal is Vector3:
+			return terrain_normal
+
+	var floor_normal := get_floor_normal()
+	if floor_normal.length_squared() > 0.0001:
+		return floor_normal
+	return Vector3.UP
 
 
 func _apply_camera_rotation() -> void:

@@ -14,6 +14,10 @@ const WEAPON_BOW := "bow"
 const WEAPON_SLING := "sling"
 const FACTION_ENEMY := "enemy"
 const FACTION_FRIENDLY := "friendly"
+const VISUAL_VARIANT_NORMAL := ""
+const VISUAL_VARIANT_PHILISTINE_BRUTE := "philistine_brute"
+const VISUAL_VARIANT_PHILISTINE_GIANT := "philistine_giant"
+const VISUAL_VARIANT_PHILISTINE_CHAMPION := "philistine_champion"
 const ORDER_CHARGE := "charge"
 const ORDER_HOLD := "hold"
 const SOLDIER_GROUP := "combat_soldiers"
@@ -40,6 +44,7 @@ const FRIENDLY_FIRE_LANE_RADIUS := 0.82
 const FRIENDLY_FIRE_SCORE_PENALTY := 1000.0
 const MAX_BOW_TARGET_CANDIDATES := 6
 const TARGET_LEASH_EXTRA := 6.0
+const BATTLEFIELD_AWARENESS_RANGE := 260.0
 const MELEE_TARGET_REFRESH_MIN_SECONDS := 0.14
 const MELEE_TARGET_REFRESH_MAX_SECONDS := 0.28
 const BOW_TARGET_REFRESH_MIN_SECONDS := 0.30
@@ -179,6 +184,7 @@ const LARGE_BATTLE_TARGET_REFRESH_MULTIPLIER := 1.65
 const LARGE_BATTLE_MORALE_CHECK_MULTIPLIER := 1.5
 const LABEL_VISIBLE_MAX_SOLDIERS := 72
 const LABEL_UPDATE_SECONDS := 0.22
+const BATTLE_SIZE_REFRESH_SECONDS := 0.45
 const LARGE_BATTLE_VISUAL_UPDATE_SECONDS := 0.066
 const SMALL_BATTLE_SEPARATION_REFRESH_SECONDS := 0.06
 const LARGE_BATTLE_SEPARATION_REFRESH_SECONDS := 0.16
@@ -200,12 +206,14 @@ const AIM_CONFIDENCE_SHOT_COST := 0.55
 @export var speed := 5
 @export var dexterity := 3
 @export var use_imported_visuals := true
+@export var visual_variant := VISUAL_VARIANT_NORMAL
 
 var player_target: Node3D
 var terrain_owner: Node
 var health := max_health
 
 var _active_target: Node3D
+var _active_target_uses_battlefield_awareness := false
 var _target_refresh_time := 0.0
 var _attack_cooldown := 0.75
 var _attack_time := 0.0
@@ -266,7 +274,11 @@ var _cached_bow_risk_target: Node3D
 var _left_battlefield := false
 var _uses_imported_visuals := false
 var _appearance_profile := {}
+var _visual_profile := {}
 var _hair_material: StandardMaterial3D
+var _cached_battle_soldier_count := 1
+var _cached_is_large_battle := false
+var _battle_size_refresh_time := 0.0
 
 static var _capsule_mesh_cache := {}
 static var _sphere_mesh: SphereMesh
@@ -274,7 +286,7 @@ static var _box_mesh_cache := {}
 static var _material_cache := {}
 
 
-func setup(new_target: Node3D, new_terrain_owner: Node, new_weapon_type := WEAPON_SWORD, new_has_shield := false, new_faction := FACTION_ENEMY, new_power := 5, new_speed := 5, new_dexterity := 3) -> void:
+func setup(new_target: Node3D, new_terrain_owner: Node, new_weapon_type := WEAPON_SWORD, new_has_shield := false, new_faction := FACTION_ENEMY, new_power := 5, new_speed := 5, new_dexterity := 3, new_visual_variant := VISUAL_VARIANT_NORMAL) -> void:
 	player_target = new_target
 	terrain_owner = new_terrain_owner
 	weapon_type = new_weapon_type
@@ -283,10 +295,10 @@ func setup(new_target: Node3D, new_terrain_owner: Node, new_weapon_type := WEAPO
 	power = clampi(new_power, MIN_STAT, MAX_STAT)
 	speed = clampi(new_speed, MIN_STAT, MAX_STAT)
 	dexterity = clampi(new_dexterity, MIN_STAT, MAX_STAT)
+	visual_variant = new_visual_variant
 
 
 func _ready() -> void:
-	health = max_health
 	collision_layer = SOLDIER_COLLISION_LAYER
 	collision_mask = WORLD_COLLISION_MASK
 	max_slides = 2
@@ -294,14 +306,18 @@ func _ready() -> void:
 	add_to_group(SOLDIER_GROUP)
 	add_to_group(_faction_group(faction))
 	_register_with_combat()
+	_refresh_battle_size_cache(0.0, true)
 	_target_refresh_time = randf_range(0.0, _target_refresh_interval())
+	_visual_profile = _visual_profile_for_variant(visual_variant)
 	_apply_stats()
+	health = max_health
 	_morale = _base_morale()
 	_morale_check_time = randf_range(0.0, _morale_check_interval())
 	_label_update_time = randf_range(0.0, LABEL_UPDATE_SECONDS)
 	_visual_update_time = randf_range(0.0, LARGE_BATTLE_VISUAL_UPDATE_SECONDS)
 	_separation_refresh_time = randf_range(0.0, _separation_refresh_seconds())
 	_appearance_profile = _make_head_appearance_profile()
+	_apply_visual_profile_to_appearance()
 	_base_material = _make_material(_profile_color("skin_color", Color("#e4b98f")), 0.88)
 	_hit_material = _make_material(Color("#8d251f"), 0.72)
 	_metal_material = _make_material(Color("#aeb7b5"), 0.35)
@@ -310,6 +326,7 @@ func _ready() -> void:
 	_cloth_material = _make_material(_cloth_color(), 0.94)
 	_build_body()
 	_build_equipment()
+	_apply_fallback_visual_variant_scale()
 	_add_health_label()
 	_update_health_label(0.0, true)
 
@@ -318,10 +335,215 @@ func _exit_tree() -> void:
 	_unregister_from_combat()
 
 
+func _visual_profile_for_variant(variant: String) -> Dictionary:
+	match variant:
+		VISUAL_VARIANT_PHILISTINE_BRUTE:
+			return {
+				"display_name": "Philistine Brute",
+				"model_scale": Vector3(1.24, 1.18, 1.20),
+				"body_radius": 0.35,
+				"body_height": 1.46,
+				"body_center_y": 0.84,
+				"head_center": Vector3(0.0, 1.88, 0.0),
+				"head_radius": Vector3(0.48, 0.42, 0.48),
+				"head_shape_radius": 0.43,
+				"headshot_min_y": 1.50,
+				"headshot_flat_radius": 0.62,
+				"label_y": 2.72,
+				"max_health_multiplier": 1.22,
+				"move_speed_multiplier": 0.92,
+				"melee_reach_bonus": 0.24,
+				"melee_damage_multiplier": 1.10,
+				"melee_cooldown_multiplier": 1.08,
+				"power_bonus": 1.0,
+				"skin_color": Color("#c98f68"),
+				"hair_color": Color("#1d130f"),
+				"cloth_color": Color("#6f3433"),
+				"head_width_scale": 1.12,
+				"head_height_scale": 1.02,
+				"head_depth_scale": 1.10,
+				"wears_helmet": true,
+			}
+		VISUAL_VARIANT_PHILISTINE_GIANT:
+			return {
+				"display_name": "Philistine Giant",
+				"model_scale": Vector3(1.52, 1.67, 1.44),
+				"body_radius": 0.44,
+				"body_height": 2.06,
+				"body_center_y": 1.14,
+				"head_center": Vector3(0.0, 2.60, 0.0),
+				"head_radius": Vector3(0.60, 0.54, 0.60),
+				"head_shape_radius": 0.58,
+				"headshot_min_y": 2.11,
+				"headshot_flat_radius": 0.68,
+				"label_y": 3.63,
+				"max_health_multiplier": 1.48,
+				"move_speed_multiplier": 0.84,
+				"melee_reach_bonus": 0.56,
+				"melee_damage_multiplier": 1.22,
+				"melee_cooldown_multiplier": 1.18,
+				"power_bonus": 2.0,
+				"skin_color": Color("#bd835f"),
+				"hair_color": Color("#15100d"),
+				"cloth_color": Color("#7a3032"),
+				"head_width_scale": 1.24,
+				"head_height_scale": 1.05,
+				"head_depth_scale": 1.22,
+				"wears_helmet": true,
+			}
+		VISUAL_VARIANT_PHILISTINE_CHAMPION:
+			return {
+				"display_name": "Philistine Champion",
+				"model_scale": Vector3(1.65, 1.85, 1.55),
+				"body_radius": 0.50,
+				"body_height": 2.31,
+				"body_center_y": 1.29,
+				"head_center": Vector3(0.0, 2.88, 0.0),
+				"head_radius": Vector3(0.66, 0.59, 0.66),
+				"head_shape_radius": 0.62,
+				"headshot_min_y": 2.34,
+				"headshot_flat_radius": 0.74,
+				"label_y": 3.95,
+				"max_health_multiplier": 1.82,
+				"move_speed_multiplier": 0.78,
+				"melee_reach_bonus": 0.79,
+				"melee_damage_multiplier": 1.35,
+				"melee_cooldown_multiplier": 1.25,
+				"power_bonus": 3.0,
+				"skin_color": Color("#b77b58"),
+				"hair_color": Color("#120d0a"),
+				"cloth_color": Color("#832d31"),
+				"head_width_scale": 1.30,
+				"head_height_scale": 1.08,
+				"head_depth_scale": 1.28,
+				"wears_helmet": true,
+			}
+	return {}
+
+
+func _apply_visual_profile_to_appearance() -> void:
+	if _visual_profile.is_empty():
+		return
+
+	for key in [
+		"model_scale",
+		"skin_color",
+		"hair_color",
+		"cloth_color",
+		"head_width_scale",
+		"head_height_scale",
+		"head_depth_scale",
+		"wears_helmet",
+	]:
+		if _visual_profile.has(key):
+			_appearance_profile[key] = _visual_profile[key]
+
+	if visual_variant.begins_with("philistine_"):
+		_appearance_profile["hair_style"] = HEAD_HAIR_BEARD if randf() < 0.65 else HEAD_HAIR_LONG
+
+
+func _visual_float(key: String, fallback: float) -> float:
+	return float(_visual_profile.get(key, fallback))
+
+
+func _visual_color(key: String, fallback: Color) -> Color:
+	var value = _visual_profile.get(key, fallback)
+	if value is Color:
+		return value
+	return fallback
+
+
+func _visual_vector3(key: String, fallback: Vector3) -> Vector3:
+	var value = _visual_profile.get(key, fallback)
+	if value is Vector3:
+		return value
+	return fallback
+
+
+func _model_visual_scale() -> Vector3:
+	return _visual_vector3("model_scale", Vector3.ONE)
+
+
+func _body_radius() -> float:
+	return _visual_float("body_radius", 0.28)
+
+
+func _body_height() -> float:
+	return _visual_float("body_height", 1.22)
+
+
+func _body_center_y() -> float:
+	return _visual_float("body_center_y", 0.7)
+
+
+func _head_center() -> Vector3:
+	return _visual_vector3("head_center", HEAD_CENTER)
+
+
+func _head_radius() -> Vector3:
+	return _visual_vector3("head_radius", HEAD_RADIUS)
+
+
+func _head_shape_radius() -> float:
+	return _visual_float("head_shape_radius", 0.38)
+
+
+func _headshot_min_y() -> float:
+	return _visual_float("headshot_min_y", HEADSHOT_MIN_Y)
+
+
+func _headshot_flat_radius() -> float:
+	return _visual_float("headshot_flat_radius", HEADSHOT_FLAT_RADIUS)
+
+
+func _label_height() -> float:
+	return _visual_float("label_y", 2.3)
+
+
+func _scale_vector3(value: Vector3, scale_value: Vector3) -> Vector3:
+	return Vector3(value.x * scale_value.x, value.y * scale_value.y, value.z * scale_value.z)
+
+
+func _apply_fallback_visual_variant_scale() -> void:
+	if _uses_imported_visuals:
+		return
+
+	var visual_scale := _model_visual_scale()
+	if visual_scale.is_equal_approx(Vector3.ONE):
+		return
+
+	_scale_fallback_visual_node(self, visual_scale)
+	_refresh_animation_base_pose()
+
+
+func _scale_fallback_visual_node(root: Node, visual_scale: Vector3) -> void:
+	for child in root.get_children():
+		if child is CollisionShape3D or child is Label3D:
+			continue
+		var node := child as Node3D
+		if node == null:
+			continue
+		node.position = _scale_vector3(node.position, visual_scale)
+		if node is MeshInstance3D:
+			node.scale = _scale_vector3(node.scale, visual_scale)
+		_scale_fallback_visual_node(node, visual_scale)
+
+
+func _refresh_animation_base_pose() -> void:
+	for index in range(_animated_meshes.size()):
+		var node := _animated_meshes[index]
+		if node == null:
+			continue
+		_base_positions[index] = node.position
+		_base_rotations[index] = node.rotation_degrees
+		_base_scales[index] = node.scale
+
+
 func _physics_process(delta: float) -> void:
 	if health <= 0 or _left_battlefield:
 		return
 
+	_refresh_battle_size_cache(delta)
 	_attack_cooldown = maxf(0.0, _attack_cooldown - delta)
 	_flash_time = maxf(0.0, _flash_time - delta)
 	_bow_lane_commit_time = maxf(0.0, _bow_lane_commit_time - delta)
@@ -409,6 +631,7 @@ func leave_battlefield() -> void:
 	_left_battlefield = true
 	_unregister_from_combat()
 	_active_target = null
+	_active_target_uses_battlefield_awareness = false
 	left_battlefield.emit(faction)
 	remove_from_group(SOLDIER_GROUP)
 	remove_from_group(_faction_group(faction))
@@ -449,6 +672,7 @@ func receive_order(order_mode: String, order_position: Vector3, formation_index:
 		_has_battle_slot = false
 		_battle_slot_released = true
 	_active_target = null
+	_active_target_uses_battlefield_awareness = false
 	_target_refresh_time = 0.0
 	_attack_time = 0.0
 	_has_struck = false
@@ -483,13 +707,15 @@ func _unregister_from_combat() -> void:
 
 
 func _think_and_move(delta: float, attack_target) -> float:
-	if not _is_attack_target_valid(attack_target):
+	if not _is_active_target_valid():
 		_active_target = null
+		_active_target_uses_battlefield_awareness = false
 		return _brake_and_report(delta)
 
 	var target := _valid_node3d(attack_target)
 	if target == null:
 		_active_target = null
+		_active_target_uses_battlefield_awareness = false
 		return _brake_and_report(delta)
 
 	_ai_action = AI_ACTION_ENGAGE
@@ -520,7 +746,7 @@ func _think_and_move(delta: float, attack_target) -> float:
 		return _move_to_order_position(delta)
 	elif _should_use_battle_slot(delta, distance):
 		return _move_to_battle_slot(delta)
-	elif distance <= aggro_range and direction != Vector3.ZERO:
+	elif direction != Vector3.ZERO:
 		return _move_for_combat_range(delta, direction, distance)
 	else:
 		_settle_or_separate(delta)
@@ -564,7 +790,7 @@ func _think_and_move_bow(delta: float, attack_target: Node3D, direction: Vector3
 		return _move_to_order_position(delta)
 	elif _should_use_battle_slot(delta, distance):
 		return _move_to_battle_slot(delta)
-	elif distance <= aggro_range and direction != Vector3.ZERO:
+	elif direction != Vector3.ZERO:
 		return _move_for_combat_range(delta, direction, distance)
 	else:
 		return _settle_or_separate(delta)
@@ -825,6 +1051,7 @@ func _die() -> void:
 	_broadcast_death_morale()
 	_unregister_from_combat()
 	_active_target = null
+	_active_target_uses_battlefield_awareness = false
 	died.emit(faction)
 	remove_from_group(SOLDIER_GROUP)
 	remove_from_group(_faction_group(faction))
@@ -944,6 +1171,7 @@ func _start_rout() -> void:
 	_rout_time = MORALE_ROUT_MIN_SECONDS + randf_range(0.0, 1.6)
 	_rout_direction = _calculate_rout_direction()
 	_active_target = null
+	_active_target_uses_battlefield_awareness = false
 	_attack_time = 0.0
 	_has_struck = false
 
@@ -1031,9 +1259,10 @@ func _morale_attack_penalty() -> float:
 
 func _update_active_target(delta: float) -> void:
 	_target_refresh_time = maxf(0.0, _target_refresh_time - delta)
-	if _target_refresh_time > 0.0 and _is_attack_target_valid(_active_target):
+	if _target_refresh_time > 0.0 and _is_active_target_valid():
 		return
 
+	_active_target_uses_battlefield_awareness = false
 	_active_target = _choose_target()
 	_target_refresh_time = _target_refresh_interval()
 
@@ -1051,7 +1280,12 @@ func _valid_node3d(value) -> Node3D:
 	return value as Node3D
 
 
-func _is_attack_target_valid(attack_target) -> bool:
+func _is_active_target_valid() -> bool:
+	var awareness_range := BATTLEFIELD_AWARENESS_RANGE if _active_target_uses_battlefield_awareness else -1.0
+	return _is_attack_target_valid(_active_target, awareness_range)
+
+
+func _is_attack_target_valid(attack_target, awareness_range := -1.0) -> bool:
 	var target := _valid_node3d(attack_target)
 	if target == null:
 		return false
@@ -1068,7 +1302,7 @@ func _is_attack_target_valid(attack_target) -> bool:
 		var defend_range := HOLD_DEFEND_RADIUS + TARGET_LEASH_EXTRA
 		return target.global_position.distance_squared_to(_order_position) <= defend_range * defend_range
 
-	var leash_range := aggro_range + TARGET_LEASH_EXTRA
+	var leash_range := awareness_range if awareness_range > 0.0 else aggro_range + TARGET_LEASH_EXTRA
 	return distance_squared <= leash_range * leash_range
 
 
@@ -1084,19 +1318,19 @@ func _opposing_faction() -> String:
 
 func _all_combat_soldiers() -> Array:
 	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_combat_soldiers"):
-		return Array(terrain_owner.call("get_combat_soldiers"))
+		return terrain_owner.call("get_combat_soldiers")
 	return get_tree().get_nodes_in_group(SOLDIER_GROUP)
 
 
 func _combat_soldiers_for_faction(soldier_faction: String) -> Array:
 	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_combat_soldiers_for_faction"):
-		return Array(terrain_owner.call("get_combat_soldiers_for_faction", soldier_faction))
+		return terrain_owner.call("get_combat_soldiers_for_faction", soldier_faction)
 	return get_tree().get_nodes_in_group(_faction_group(soldier_faction))
 
 
 func _nearby_combat_soldiers(center: Vector3, radius: float, soldier_faction := "") -> Array:
 	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_nearby_combat_soldiers"):
-		return Array(terrain_owner.call("get_nearby_combat_soldiers", center, radius, soldier_faction))
+		return terrain_owner.call("get_nearby_combat_soldiers", center, radius, soldier_faction)
 
 	var source := _all_combat_soldiers()
 	if soldier_faction != "":
@@ -1113,14 +1347,49 @@ func _nearby_combat_soldiers(center: Vector3, radius: float, soldier_faction := 
 	return result
 
 
+func _nearest_combat_soldier(center: Vector3, radius: float, soldier_faction := "") -> Node3D:
+	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_nearest_combat_soldier"):
+		return terrain_owner.call("get_nearest_combat_soldier", center, radius, soldier_faction, self) as Node3D
+
+	var source := _all_combat_soldiers()
+	if soldier_faction != "":
+		source = _combat_soldiers_for_faction(soldier_faction)
+
+	var best: Node3D
+	var best_distance_squared := radius * radius
+	for node in source:
+		var soldier := node as Node3D
+		if soldier == self or soldier == null or not is_instance_valid(soldier):
+			continue
+		if soldier.global_position.distance_squared_to(center) <= best_distance_squared:
+			best = soldier
+			best_distance_squared = soldier.global_position.distance_squared_to(center)
+	return best
+
+
 func _battle_soldier_count() -> int:
+	return _cached_battle_soldier_count
+
+
+func _query_battle_soldier_count() -> int:
 	if terrain_owner != null and is_instance_valid(terrain_owner) and terrain_owner.has_method("get_combat_soldier_count"):
 		return int(terrain_owner.call("get_combat_soldier_count"))
 	return get_tree().get_nodes_in_group(SOLDIER_GROUP).size()
 
 
 func _is_large_battle() -> bool:
-	return _battle_soldier_count() >= LARGE_BATTLE_SOLDIER_COUNT
+	return _cached_is_large_battle
+
+
+func _refresh_battle_size_cache(delta: float, force := false) -> void:
+	if not force:
+		_battle_size_refresh_time = maxf(0.0, _battle_size_refresh_time - delta)
+		if _battle_size_refresh_time > 0.0:
+			return
+
+	_battle_size_refresh_time = BATTLE_SIZE_REFRESH_SECONDS + randf_range(0.0, 0.12)
+	_cached_battle_soldier_count = _query_battle_soldier_count()
+	_cached_is_large_battle = _cached_battle_soldier_count >= LARGE_BATTLE_SOLDIER_COUNT
 
 
 func _morale_check_interval() -> float:
@@ -1149,15 +1418,15 @@ func _choose_target() -> Node3D:
 		if best_target != null:
 			best_distance_squared = global_position.distance_squared_to(best_target.global_position)
 
-	for node in _combat_soldiers_for_faction(_opposing_faction()):
-		var candidate := node as Node3D
-		if candidate == null or not _is_attack_target_valid(candidate):
-			continue
+	var candidate := _nearest_attackable_combat_soldier(global_position, aggro_range)
+	if candidate != null and _is_attack_target_valid(candidate):
 		best_target = _nearest_target(best_target, best_distance_squared, candidate)
 		if best_target != null:
 			best_distance_squared = global_position.distance_squared_to(best_target.global_position)
 
-	return best_target
+	if best_target != null:
+		return best_target
+	return _choose_battlefield_target()
 
 
 func _choose_hold_defense_target() -> Node3D:
@@ -1165,8 +1434,13 @@ func _choose_hold_defense_target() -> Node3D:
 	var best_score := 999999.0
 	var bow_candidates: Array[Node3D] = []
 	var bow_distances: Array[float] = []
+	var search_center := global_position
+	var search_radius := BOW_ATTACK_RANGE + TARGET_LEASH_EXTRA
+	if weapon_type != WEAPON_BOW:
+		search_center = _order_position
+		search_radius = HOLD_DEFEND_RADIUS + TARGET_LEASH_EXTRA
 
-	for node in _combat_soldiers_for_faction(_opposing_faction()):
+	for node in _nearby_combat_soldiers(search_center, search_radius):
 		var candidate := node as Node3D
 		if candidate == null or not _is_attack_target_valid(candidate):
 			continue
@@ -1196,7 +1470,7 @@ func _choose_bow_target() -> Node3D:
 	if faction == FACTION_ENEMY and _is_attack_target_valid(player_target):
 		_remember_bow_candidate(candidates, distances, player_target, global_position.distance_squared_to(player_target.global_position))
 
-	for node in _combat_soldiers_for_faction(_opposing_faction()):
+	for node in _nearby_combat_soldiers(global_position, aggro_range):
 		var candidate := node as Node3D
 		if candidate == null or not _is_attack_target_valid(candidate):
 			continue
@@ -1205,7 +1479,30 @@ func _choose_bow_target() -> Node3D:
 			continue
 		_remember_bow_candidate(candidates, distances, candidate, distance_squared)
 
-	return _lowest_risk_bow_candidate(candidates, distances)
+	var best_target := _lowest_risk_bow_candidate(candidates, distances)
+	if best_target != null:
+		return best_target
+	return _choose_battlefield_target()
+
+
+func _choose_battlefield_target() -> Node3D:
+	var best_target: Node3D
+	var best_distance_squared := BATTLEFIELD_AWARENESS_RANGE * BATTLEFIELD_AWARENESS_RANGE
+
+	if faction == FACTION_ENEMY and _is_attack_target_valid(player_target, BATTLEFIELD_AWARENESS_RANGE):
+		best_target = _nearest_target(best_target, best_distance_squared, player_target)
+		if best_target != null:
+			best_distance_squared = global_position.distance_squared_to(best_target.global_position)
+
+	var candidate := _nearest_attackable_combat_soldier(global_position, BATTLEFIELD_AWARENESS_RANGE, BATTLEFIELD_AWARENESS_RANGE)
+	if candidate != null and _is_attack_target_valid(candidate, BATTLEFIELD_AWARENESS_RANGE):
+		best_target = _nearest_target(best_target, best_distance_squared, candidate)
+		if best_target != null:
+			best_distance_squared = global_position.distance_squared_to(best_target.global_position)
+
+	if best_target != null:
+		_active_target_uses_battlefield_awareness = true
+	return best_target
 
 
 func _lowest_risk_bow_candidate(candidates: Array[Node3D], distances: Array[float]) -> Node3D:
@@ -1260,21 +1557,41 @@ func _nearest_target(current_best: Node3D, current_best_distance_squared: float,
 	return current_best
 
 
+func _nearest_attackable_combat_soldier(center: Vector3, radius: float, awareness_range := -1.0) -> Node3D:
+	var best_target: Node3D
+	var best_distance_squared := radius * radius
+	for node in _nearby_combat_soldiers(center, radius):
+		var candidate := node as Node3D
+		if candidate == self or candidate == null or not _is_attack_target_valid(candidate, awareness_range):
+			continue
+
+		var distance_squared := center.distance_squared_to(candidate.global_position)
+		if distance_squared <= best_distance_squared:
+			best_target = candidate
+			best_distance_squared = distance_squared
+	return best_target
+
+
 func _apply_stats() -> void:
 	power = clampi(power, MIN_STAT, MAX_STAT)
 	speed = clampi(speed, MIN_STAT, MAX_STAT)
 	dexterity = clampi(dexterity, MIN_STAT, MAX_STAT)
-	move_speed = 2.7 + float(speed) * 0.14
+	power = clampi(int(round(float(power) + _visual_float("power_bonus", 0.0))), MIN_STAT, MAX_STAT)
+	move_speed = (2.7 + float(speed) * 0.14) * _visual_float("move_speed_multiplier", 1.0)
+	max_health = maxi(1, int(round(float(max_health) * _visual_float("max_health_multiplier", 1.0))))
 
 
 func _attack_range() -> float:
 	if weapon_type == WEAPON_BOW:
 		return BOW_ATTACK_RANGE
-	return SWORD_ATTACK_RANGE
+	return SWORD_ATTACK_RANGE + _visual_float("melee_reach_bonus", 0.0)
 
 
 func _damage_from_power(base_damage: int) -> int:
-	return maxi(1, int(round(float(base_damage) * (0.65 + float(power) / 10.0))))
+	var damage := float(base_damage) * (0.65 + float(power) / 10.0)
+	if weapon_type != WEAPON_BOW:
+		damage *= _visual_float("melee_damage_multiplier", 1.0)
+	return maxi(1, int(round(damage)))
 
 
 func _arrow_damage_from_dexterity() -> int:
@@ -1296,7 +1613,7 @@ func _attack_strike_time_seconds() -> float:
 func _attack_cooldown_seconds() -> float:
 	if weapon_type == WEAPON_BOW:
 		return 0.0
-	return SWORD_ATTACK_COOLDOWN * (1.0 + _fatigue_ratio() * FATIGUE_ATTACK_COOLDOWN_PENALTY + _morale_attack_penalty())
+	return SWORD_ATTACK_COOLDOWN * _visual_float("melee_cooldown_multiplier", 1.0) * (1.0 + _fatigue_ratio() * FATIGUE_ATTACK_COOLDOWN_PENALTY + _morale_attack_penalty())
 
 
 func _move_while_charging_bow(delta: float, direction: Vector3, distance: float) -> void:
@@ -1770,16 +2087,18 @@ func _face_direction(direction: Vector3, delta: float) -> void:
 
 func _is_headshot(hit_position: Vector3) -> bool:
 	var local_hit := to_local(hit_position)
+	var head_center := _head_center()
+	var head_radius := _head_radius()
 	var normalized_offset := Vector3(
-		(local_hit.x - HEAD_CENTER.x) / HEAD_RADIUS.x,
-		(local_hit.y - HEAD_CENTER.y) / HEAD_RADIUS.y,
-		(local_hit.z - HEAD_CENTER.z) / HEAD_RADIUS.z
+		(local_hit.x - head_center.x) / head_radius.x,
+		(local_hit.y - head_center.y) / head_radius.y,
+		(local_hit.z - head_center.z) / head_radius.z
 	)
 	if normalized_offset.length() <= 1.0:
 		return true
 
-	var flat_offset := Vector2(local_hit.x - HEAD_CENTER.x, local_hit.z - HEAD_CENTER.z)
-	return local_hit.y >= HEADSHOT_MIN_Y and flat_offset.length() <= HEADSHOT_FLAT_RADIUS
+	var flat_offset := Vector2(local_hit.x - head_center.x, local_hit.z - head_center.z)
+	return local_hit.y >= _headshot_min_y() and flat_offset.length() <= _headshot_flat_radius()
 
 
 func _make_head_appearance_profile() -> Dictionary:
@@ -1869,18 +2188,18 @@ func _add_head_child_sphere(node_name: String, position: Vector3, node_scale: Ve
 func _build_body() -> void:
 	var body_shape := CollisionShape3D.new()
 	var capsule := CapsuleShape3D.new()
-	capsule.radius = 0.28
-	capsule.height = 1.22
+	capsule.radius = _body_radius()
+	capsule.height = _body_height()
 	body_shape.shape = capsule
-	body_shape.position.y = 0.7
+	body_shape.position.y = _body_center_y()
 	add_child(body_shape)
 
 	var head_shape := CollisionShape3D.new()
 	head_shape.name = "HeadHitShape"
 	var head_sphere := SphereShape3D.new()
-	head_sphere.radius = 0.38
+	head_sphere.radius = _head_shape_radius()
 	head_shape.shape = head_sphere
-	head_shape.position = HEAD_CENTER
+	head_shape.position = _head_center()
 	add_child(head_shape)
 
 	if _try_build_imported_visual():
@@ -2018,7 +2337,7 @@ func _build_bow() -> void:
 func _add_health_label() -> void:
 	_label = Label3D.new()
 	_label.name = "HealthLabel"
-	_label.position = Vector3(0.0, 2.3, 0.0)
+	_label.position = Vector3(0.0, _label_height(), 0.0)
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.font_size = 42
 	_label.outline_size = 8
@@ -2045,6 +2364,8 @@ func _update_health_label(delta := 0.0, force := false) -> void:
 	var name_text := "Enemy %s" % role
 	if faction == FACTION_FRIENDLY:
 		name_text = "Ally %s" % role
+	elif not String(_visual_profile.get("display_name", "")).is_empty():
+		name_text = String(_visual_profile.get("display_name", ""))
 	var label_text := "%s\n%d/%d\n%s | %s\nM %.0f F %.0f" % [name_text, health, max_health, _ai_action, _morale_state, _morale, _fatigue]
 	if label_text != _last_label_text:
 		_label.text = label_text
@@ -2063,7 +2384,7 @@ func _should_show_health_label() -> bool:
 func _cloth_color() -> Color:
 	if faction == FACTION_FRIENDLY:
 		return Color("#3f7450")
-	return Color("#744434")
+	return _visual_color("cloth_color", Color("#744434"))
 
 
 func _label_color() -> Color:

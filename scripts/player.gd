@@ -5,6 +5,7 @@ extends CharacterBody2D
 
 var movement_constraint: Callable
 var campaign_speed_multiplier := 1.0
+var keyboard_movement_enabled := true
 var _facing := Vector2.RIGHT
 var _travel_target := Vector2.ZERO
 var _has_travel_target := false
@@ -13,7 +14,7 @@ var _arrival_radius := 20.0
 
 func _physics_process(_delta: float) -> void:
 	var previous_position := global_position
-	var input_vector := _get_keyboard_vector()
+	var input_vector := _get_keyboard_vector() if keyboard_movement_enabled else Vector2.ZERO
 
 	if input_vector != Vector2.ZERO:
 		_has_travel_target = false

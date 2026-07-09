@@ -332,7 +332,7 @@ func _apply_facing_and_scale() -> void:
 		return
 	_model_root.position = Vector3.ZERO
 	_model_root.rotation_degrees = MODEL_BASE_ROTATION_DEGREES
-	_model_root.scale = Vector3.ONE
+	_model_root.scale = _appearance_vector3("model_scale", Vector3.ONE)
 
 
 func _set_model_rotation(rotation_degrees: Vector3) -> void:
@@ -342,6 +342,7 @@ func _set_model_rotation(rotation_degrees: Vector3) -> void:
 
 func _apply_faction_colors() -> void:
 	var cloth_color := FRIENDLY_CLOTH_COLOR if _faction == FACTION_FRIENDLY else ENEMY_CLOTH_COLOR
+	cloth_color = _appearance_color("cloth_color", cloth_color)
 	var colored_markers := 0
 	for marker_mesh in _find_faction_marker_meshes():
 		if marker_mesh == null:
@@ -507,6 +508,13 @@ func _merge_modular_hairstyle(target_skeleton: Skeleton3D, path: String, hair_co
 func _appearance_color(key: String, fallback: Color) -> Color:
 	var value = _appearance_profile.get(key, fallback)
 	if value is Color:
+		return value
+	return fallback
+
+
+func _appearance_vector3(key: String, fallback: Vector3) -> Vector3:
+	var value = _appearance_profile.get(key, fallback)
+	if value is Vector3:
 		return value
 	return fallback
 
