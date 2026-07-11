@@ -33,6 +33,7 @@ func _run() -> void:
 	_validate_selective_lord_engagement(campaign_map)
 	_validate_lord_absorption_hover(campaign_map)
 	_validate_muster_tracks_live_support(campaign_map)
+	_validate_hiding_fast_forward_breaks_pursuit(campaign_map)
 	_reset_game_state_for_sim()
 	campaign_map.call("_initialize_lord_parties")
 	seed(12345)
@@ -322,6 +323,63 @@ func _validate_muster_tracks_live_support(campaign_map: Node) -> void:
 	var loitered_position := Vector2(loitered_lord.get("position", stack_position))
 	if loitered_position.distance_to(stack_position) < 28.0:
 		_errors.append("Muster support tracking: mustering lord should loiter beside support instead of stacking on top.")
+	_game_state.call("clear_all_lord_pursuit_states")
+
+
+func _validate_hiding_fast_forward_breaks_pursuit(campaign_map: Node) -> void:
+	_game_state.call("clear_all_lord_pursuit_states")
+	_game_state.set("heat", 35)
+
+	var hiding_position = campaign_map.call("_position_for_named_settlement", "Bethlehem", STARTING_POSITION)
+	if not (hiding_position is Vector2) or Vector2(hiding_position) == Vector2.INF:
+		_errors.append("Hiding fast-forward: could not resolve Bethlehem position.")
+		return
+
+	var pursuer_position := _separated_land_position(campaign_map, Vector2(hiding_position))
+	if pursuer_position == Vector2.INF:
+		_errors.append("Hiding fast-forward: could not place pursuing lord.")
+		return
+
+	var pursuer := _sim_lord("Hiding Pursuer", "House of Saul", "retainer", 46, pursuer_position, "Gibeah")
+	pursuer["state"] = "pursuing"
+	pursuer["task"] = {
+		"type": "pursue",
+		"target_kind": "player",
+		"target_name": "your band",
+		"target_pos": Vector2(hiding_position),
+		"priority": 90.0,
+		"confidence": 90.0
+	}
+	pursuer["local_knowledge"] = {
+		"position": Vector2(hiding_position),
+		"confidence": 90.0,
+		"minute": int(_game_state.call("get_game_total_minutes")),
+		"source": "test pursuit"
+	}
+	campaign_map.call("_debug_replace_lord_parties_for_sim", [pursuer])
+	_game_state.call("set_lord_pursuit_state", "Hiding Pursuer", {
+		"state": "pursuing",
+		"started_minute": int(_game_state.call("get_game_total_minutes")),
+		"confidence": 90.0
+	})
+
+	campaign_map.call("break_player_trail_at", Vector2(hiding_position), "hiding")
+	_game_state.call("set_game_total_minutes", int(_game_state.call("get_game_total_minutes")) + 60)
+	campaign_map.call("update_overworld_ai", float(60) / GAME_MINUTES_PER_REAL_SECOND, Vector2(hiding_position), true)
+
+	var pursuit_state := Dictionary(_game_state.call("get_lord_pursuit_state", "Hiding Pursuer"))
+	if not pursuit_state.is_empty():
+		_errors.append("Hiding fast-forward: pursuit state should be cleared while hiding.")
+
+	var hidden_lord := _snapshot_lord(campaign_map, "Hiding Pursuer")
+	var hidden_state := String(hidden_lord.get("state", ""))
+	if hidden_state == "pursuing":
+		_errors.append("Hiding fast-forward: pursuing lord should lose the active chase.")
+
+	var knowledge := Dictionary(hidden_lord.get("knowledge", {}))
+	var confidence := float(knowledge.get("confidence", 100.0))
+	if confidence >= 90.0:
+		_errors.append("Hiding fast-forward: hostile confidence should drop while hiding, got %.1f." % confidence)
 	_game_state.call("clear_all_lord_pursuit_states")
 
 

@@ -23,6 +23,12 @@ const MAIN_STORY_QUESTS := [
 		"target_names": ["Bethlehem"]
 	},
 	{
+		"id": "secret_anointing",
+		"title": "Secret Anointing",
+		"objective": "Return to Jesse's house while Shmuel keeps Saul's eyes off the road.",
+		"target_names": ["Bethlehem"]
+	},
+	{
 		"id": "bread_to_brothers",
 		"title": "Bread to the Camp",
 		"objective": "Carry food from Bethlehem to the Israelite camp at Socoh.",
@@ -548,6 +554,10 @@ func get_combat_map_context() -> Dictionary:
 			"biome_properties": {}
 		}
 	return combat_map_context.duplicate(true)
+
+
+func has_combat_map_context() -> bool:
+	return not combat_map_context.is_empty()
 
 
 func clear_combat_map_context() -> void:

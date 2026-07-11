@@ -34,7 +34,8 @@ const PLAYER_SIZE_SPEED_PENALTY_MAX := 0.20
 const PLAYER_INTELLIGENCE_SPEED_BONUS_STAT := 50.0
 const PLAYER_INTELLIGENCE_SPEED_BONUS_MAX := 0.30
 const PLAYER_CAMPAIGN_SPEED_MULTIPLIER := 0.5
-const HIDE_MINUTES := 3 * 60
+const HIDE_FAST_FORWARD_MULTIPLIER := 6.0
+const HIDE_FOOD_INTERVAL_MINUTES := 3 * 60
 const AI_DEBUG_ADVANCE_HOURS := 6
 const PRESSURE_WARY_THRESHOLD := 25.0
 const PRESSURE_DANGEROUS_THRESHOLD := 55.0
@@ -91,6 +92,11 @@ var _location_tooltip_lords_label: Label
 var _camera_following_player := true
 var _quest_arrow: Polygon2D
 var _quest_arrow_label: Label
+var _hide_fast_forward_active := false
+var _hide_fast_forward_can_stop := false
+var _hide_fast_forward_start_minute := 0
+var _hide_fast_forward_food_minutes := 0.0
+var _hide_fast_forward_last_shown_minute := -1
 
 
 func _ready() -> void:
@@ -118,7 +124,7 @@ func _ready() -> void:
 	dialogue_rumor_button.pressed.connect(_ask_for_news)
 	dialogue_buy_food_button.pressed.connect(_buy_food)
 	dialogue_take_food_button.pressed.connect(_take_food)
-	dialogue_hide_button.pressed.connect(_hide_until_dark)
+	dialogue_hide_button.pressed.connect(_start_hide_fast_forward)
 	dialogue_leave_button.pressed.connect(_close_dialogue)
 	_open_pending_campaign_loot()
 	_update_location_label(true)
@@ -131,6 +137,12 @@ func _process(delta: float) -> void:
 	_update_camera_pan(delta)
 	_update_player_campaign_speed()
 	campaign_map.player_position = player.global_position
+	if _hide_fast_forward_active:
+		_process_hide_fast_forward(delta)
+		_update_time_label()
+		_update_status_label()
+		GameState.campaign_position = player.global_position
+		return
 	if _advance_time_if_player_moved(delta):
 		GameState.advance_travel_survival(delta)
 		GameState.save_party_data(party_panel.get_party_data())
@@ -153,6 +165,7 @@ func _process(delta: float) -> void:
 		var target_position: Vector2 = _pending_encounter["pos"]
 		if player.global_position.distance_to(target_position) <= 34.0:
 			player.stop_travel()
+			_enter_settlement_target(_pending_encounter)
 			_show_dialogue(_pending_encounter)
 
 	_update_location_label(false)
@@ -161,6 +174,22 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _hide_fast_forward_active:
+		var stop_mouse_event := event as InputEventMouseButton
+		if stop_mouse_event != null and stop_mouse_event.pressed:
+			if stop_mouse_event.button_index == MOUSE_BUTTON_WHEEL_UP:
+				_target_zoom = clampf(_target_zoom + ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+				_mark_input_handled()
+				return
+			if stop_mouse_event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+				_target_zoom = clampf(_target_zoom - ZOOM_STEP, ZOOM_MIN, ZOOM_MAX)
+				_mark_input_handled()
+				return
+			if _hide_fast_forward_can_stop:
+				_stop_hide_fast_forward()
+			_mark_input_handled()
+		return
+
 	var key_event := event as InputEventKey
 	if key_event != null and key_event.pressed and not key_event.echo and key_event.keycode == KEY_H and _dev_cheats_enabled():
 		_toggle_cheat_panel()
@@ -1030,6 +1059,9 @@ func _close_dialogue() -> void:
 		_close_loot_panel()
 		return
 
+	if _hide_fast_forward_active:
+		_stop_hide_fast_forward(false)
+
 	var was_trading := market_panel.visible
 	dialogue_panel.visible = false
 	market_panel.visible = false
@@ -1167,22 +1199,108 @@ func _take_food() -> void:
 	_update_status_label()
 
 
-func _hide_until_dark() -> void:
+func _start_hide_fast_forward() -> void:
 	if String(_dialogue_target.get("type", "")) != "settlement":
 		return
 
+	if _hide_fast_forward_active:
+		return
+
+	player.stop_travel()
+	_pending_encounter = {}
+	_hide_fast_forward_active = true
+	_hide_fast_forward_can_stop = false
+	_hide_fast_forward_start_minute = GameState.get_game_total_minutes()
+	_hide_fast_forward_food_minutes = 0.0
+	_hide_fast_forward_last_shown_minute = -1
+	call_deferred("_enable_hide_fast_forward_stop")
 	campaign_map.break_player_trail_at(player.global_position, "hiding")
-	GameState.set_game_total_minutes(GameState.get_game_total_minutes() + HIDE_MINUTES)
-	campaign_map.update_overworld_ai(float(HIDE_MINUTES) / GameState.GAME_MINUTES_PER_REAL_SECOND, player.global_position, true)
-	GameState.adjust_food(-1)
 	GameState.adjust_morale(1)
 	GameState.clear_all_lord_pursuit_states()
-	GameState.last_campaign_notice = "You lie low until the road quiets."
-	dialogue_body.text = "You keep the men under roofs and behind walls until the road has fewer eyes. Time passes. Food -1. Morale +1. Any immediate pursuit is broken."
+	GameState.last_campaign_notice = "You lie low while hostile scouts work from stale tracks."
+	dialogue_body.text = "You keep the men under roofs and behind walls. Time is running fast; click anywhere to step back out. Morale +1. Food drops every 3 hours. Any immediate pursuit is broken."
+	_hide_settlement_action_buttons()
+	dialogue_leave_button.visible = false
+	_update_status_label()
+
+
+func _enable_hide_fast_forward_stop() -> void:
+	_hide_fast_forward_can_stop = _hide_fast_forward_active
+
+
+func _process_hide_fast_forward(delta: float) -> void:
+	var simulated_seconds := delta * HIDE_FAST_FORWARD_MULTIPLIER
+	var previous_minute := GameState.get_game_total_minutes()
+	GameState.advance_game_time(simulated_seconds)
+	var elapsed_minutes := maxi(0, GameState.get_game_total_minutes() - previous_minute)
+	if elapsed_minutes > 0:
+		_hide_fast_forward_food_minutes += float(elapsed_minutes)
+		while _hide_fast_forward_food_minutes >= float(HIDE_FOOD_INTERVAL_MINUTES):
+			_hide_fast_forward_food_minutes -= float(HIDE_FOOD_INTERVAL_MINUTES)
+			GameState.adjust_food(-1)
+	var caught_target: Dictionary = campaign_map.update_overworld_ai(simulated_seconds, player.global_position, true)
+	if not caught_target.is_empty():
+		GameState.clear_all_lord_pursuit_states()
+
+	_update_hide_fast_forward_text(false)
+	campaign_map.queue_redraw()
+
+
+func _stop_hide_fast_forward(show_result: bool = true) -> void:
+	if not _hide_fast_forward_active:
+		return
+
+	_hide_fast_forward_active = false
+	_hide_fast_forward_can_stop = false
+	_hide_fast_forward_food_minutes = 0.0
+	_hide_fast_forward_last_shown_minute = -1
+	dialogue_leave_button.visible = true
+	if show_result:
+		_update_hide_fast_forward_text(true)
+		dialogue_continue_button.visible = false
+		dialogue_recruit_button.visible = _can_recruit_from_dialogue_town()
+		if dialogue_recruit_button.visible:
+			dialogue_recruit_button.text = "Recruit (%d)" % _dialogue_recruit_count
+		dialogue_attack_button.visible = false
+		dialogue_trade_button.visible = true
+		dialogue_rumor_button.visible = true
+		dialogue_buy_food_button.visible = true
+		dialogue_take_food_button.visible = true
+		dialogue_hide_button.visible = true
+		dialogue_buy_food_button.disabled = not GameState.can_spend_silver(FOOD_BUY_SILVER_COST)
+		dialogue_take_food_button.disabled = not _can_take_food_by_force()
+		dialogue_buy_food_button.text = "Buy Food (%ds)" % FOOD_BUY_SILVER_COST
+		dialogue_take_food_button.text = "Take Food" if _can_take_food_by_force() else "Need %d Men" % FOOD_TAKE_MINIMUM_MEN
+		dialogue_leave_button.text = "Leave"
 	_update_time_label()
 	campaign_map.queue_redraw()
-	_hide_settlement_action_buttons()
 	_update_status_label()
+
+
+func _update_hide_fast_forward_text(stopped: bool) -> void:
+	var elapsed_minutes := maxi(0, GameState.get_game_total_minutes() - _hide_fast_forward_start_minute)
+	if not stopped and elapsed_minutes == _hide_fast_forward_last_shown_minute:
+		return
+
+	_hide_fast_forward_last_shown_minute = elapsed_minutes
+	var elapsed_text := _format_duration_minutes(elapsed_minutes)
+	if stopped:
+		GameState.last_campaign_notice = "You step back out after %s hidden from the road." % elapsed_text
+		dialogue_body.text = "You step back into the streets after %s out of sight. Enemy scouts are left with stale tracks and confused witnesses." % elapsed_text
+		return
+
+	dialogue_body.text = "You keep the men under roofs and behind walls. Time is running fast; click anywhere to step back out.\n\nHidden: %s. Enemy scouts are working from stale tracks." % elapsed_text
+
+
+func _format_duration_minutes(total_minutes: int) -> String:
+	var clamped_minutes := maxi(0, total_minutes)
+	var hours := int(clamped_minutes / 60)
+	var minutes := clamped_minutes % 60
+	if hours <= 0:
+		return "%dm" % minutes
+	if minutes <= 0:
+		return "%dh" % hours
+	return "%dh %02dm" % [hours, minutes]
 
 
 func _start_lord_combat() -> void:
@@ -1287,6 +1405,9 @@ func _dialogue_title_for(target: Dictionary) -> String:
 
 
 func _render_dialogue_page() -> void:
+	if _hide_fast_forward_active:
+		return
+
 	if _loot_take_silver_button != null:
 		_loot_take_silver_button.visible = false
 
@@ -1335,6 +1456,22 @@ func _force_lord_encounter(target: Dictionary) -> void:
 	_pending_encounter = {}
 	GameState.last_campaign_notice = "%s has caught you on the road." % String(target.get("name", "A hostile lord"))
 	_show_dialogue(target)
+
+
+func _enter_settlement_target(target: Dictionary) -> void:
+	if String(target.get("type", "")) != "settlement":
+		return
+	var raw_position = target.get("pos", player.global_position)
+	if not (raw_position is Vector2):
+		return
+
+	var town_position: Vector2 = campaign_map.constrain_land_position(Vector2(raw_position), player.global_position)
+	player.global_position = town_position
+	player.velocity = Vector2.ZERO
+	_last_player_position = town_position
+	GameState.campaign_position = town_position
+	campaign_map.player_position = town_position
+	campaign_map.queue_redraw()
 
 
 func _is_player_in_safe_place() -> bool:
@@ -1410,6 +1547,8 @@ func _apply_story_rewards(quest_id: String) -> void:
 			GameState.adjust_food(4)
 			GameState.adjust_morale(4)
 			GameState.award_player_sling_xp(8)
+		"secret_anointing":
+			GameState.adjust_morale(5)
 		"bread_to_brothers":
 			GameState.adjust_food(-2)
 			GameState.adjust_morale(3)
@@ -1458,6 +1597,11 @@ func _story_completion_pages(quest_id: String) -> Array[String]:
 			return [
 				"The sheep break first. Then the brush breaks. A predator comes low through the grass, hungry enough to ignore shouting.",
 				"You meet it with sling-stone, staff, and the ugly calm of a shepherd who cannot afford panic. The flock lives. Jesse's house has food for the road. Food +4. Morale +4. Sling XP +8."
+			]
+		"secret_anointing":
+			return [
+				"Shmuel comes to Bethlehem under the cover of sacrifice, quiet enough that Saul's watchers should hear only ordinary piety.",
+				"Behind Jesse's door, the horn of oil finds you last. No heralds, no throne, no crown. Only a secret that changes the weight of every road ahead. Morale +5."
 			]
 		"bread_to_brothers":
 			return [

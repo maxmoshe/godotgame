@@ -46,9 +46,48 @@ Output intent: primary ground layer for a 3D terrain shader.
 
 The built-in image tool saves generated files under `$CODEX_HOME/generated_images/`. Keep that original file in place and create a project copy.
 
+## Siege And Castle Stone
+
+Castle, fortress, keep, tower, wall, stair, and gatehouse stone should use one shared siege texture instead of biome-specific rock textures. This keeps built structures visually consistent across combat biomes.
+
+Current shared castle stone:
+
+```text
+assets/textures/siege/jerusalem_limestone_blocks_diff_1k.jpg
+assets/textures/siege/jerusalem_limestone_blocks_disp_1k.png
+```
+
+Use this prompt shape when refreshing it:
+
+```text
+Use case: stylized-concept
+Asset type: square seamless masonry albedo texture for a Godot 4 ancient fortress/castle wall material
+Primary request: Generate a Jerusalem limestone block wall texture for all castle and siege stone surfaces.
+View and composition: orthographic straight-on wall texture, flat square tile, no perspective, no horizon, designed to repeat seamlessly on vertical and horizontal surfaces.
+Surface details: pale warm cream Jerusalem limestone, hand-cut rectangular ashlar blocks, uneven block sizes, thin recessed mortar seams, chipped edges, subtle pitting, weathered chalky stone grain, faint tan dust in crevices.
+Style: realistic but game-readable, matte, medium contrast, ancient Levant fortress masonry.
+Constraints: no windows, doors, plants, large cracks, graffiti, text, border, watermark, cast shadows, dramatic lighting, or obvious repeated pattern.
+Output intent: shared albedo texture for 3D fortress walls, towers, stairs, gatehouse, keep, and storehouse.
+```
+
+Derive the displacement map like a rock texture:
+
+```bash
+convert assets/textures/siege/jerusalem_limestone_blocks_diff_1k.jpg -colorspace Gray -auto-level -blur 0x0.45 -sigmoidal-contrast 5x48% -level 9%,96% -strip assets/textures/siege/jerusalem_limestone_blocks_disp_1k.png
+```
+
+Do not wire castle stone through biome profile `rock_*` keys. Terrain rocks can vary by biome; built masonry should not.
+
 ## Prompt Sets
 
 Keep the final prompt set in this doc when a biome graduates into the project.
+
+Coastal Plain:
+
+- primary ground: southern Levant coastal plain, sandy loam, pale calcareous soil, small kurkar sandstone chips, dry yellow grass, sparse low coastal scrub, tiny shell fragments at low density, not a beach scene.
+- scrub spots: pale kurkar gravel, sandy loam pockets, denser dry coastal grass, gray-green scrub flecks, shell grit, small rounded calcareous stones.
+- paths: compacted sandy loam, pale calcareous dust, tiny kurkar pebbles, fine straw, shell grit, very sparse dry grass fibers.
+- rocks: honey-beige porous kurkar sandstone, shell inclusions, small pits, weathered surface, faint tan soil stains.
 
 Central Highlands:
 
@@ -63,6 +102,28 @@ Galilee Hills:
 - maquis spots: darker leaf-litter and scrub patches with dense oak/pistacia fragments, mossy grass tufts, thorny gray-green maquis, embedded limestone chips.
 - paths: compacted reddish terra rossa, dusty limestone powder, embedded pale pebbles, crushed dry leaves, fine roots, sparse grass.
 - rocks: pale beige-gray Galilee limestone/dolomite, chalky grain, pits, fine fractures, tan soil stains, subtle gray-green lichen speckles.
+
+Jordan Rift:
+
+- primary ground: Jericho/Dead Sea-margin alluvial silt, pale marl/chalk flecks, light mineral crust speckles, dry reed fragments, sparse tamarisk/acacia litter, tiny rounded wadi pebbles.
+- marl spots: chalky pale marl crust, white salt/mineral speckles, compact tan silt, scattered wadi pebbles, dry reed splinters, muted desert shrub flecks.
+- paths: smooth dusty tan alluvial silt, pale marl dust, fine mineral speckles, sparse tiny rounded pebbles, dry reed fibers.
+- rocks: pale chalky marl and tan limestone, powdery grain, erosion pits, dusty cracks, white mineral/salt stains, rounded pebble inclusions.
+
+Transjordan Plateau:
+
+- primary ground: tan limestone gravel, red-brown dusty soil pockets, dark chert/flint chips, sparse dry steppe grass, gray-green scrub flecks, straw fragments.
+- chert spots: dense tan limestone chips, dark flint/chert fragments, reddish dusty soil between stones, sparse wiry steppe grass.
+- paths: hard-packed tan dust, red-brown soil, crushed limestone powder, small chert/flint chips, fine gravel, sparse straw fibers.
+- rocks: tan weathered limestone with dark gray-brown chert/flint veins, pits, fractured grain, reddish dust stains, subtle desert varnish.
+
+Negev / Arabah Wilderness:
+
+- primary ground: orange-tan loess dust, angular limestone gravel, dark flint pebbles, dry cracked clay flecks, desert-varnish stones, sparse dead thorn fragments.
+- wadi-fan spots: dense angular limestone gravel, dark flint pebbles, orange-tan loess dust, cracked dry clay pockets, desert-varnished stones, dead thorn fragments.
+- paths: hard-packed orange-tan loess dust, crushed limestone powder, dark flint chips, fine desert gravel, faint cracked dry clay, sparse twig fibers.
+- rocks: tan limestone, dark flint nodules/chips, fractured grain, erosion pits, orange loess dust stains, subtle desert varnish, chalky dry edges.
+- terrain relief: use `terrain_vertical_relief_*` profile keys for Negev-style makhtesh and wadi-cut heightmap relief. Keep this as terrain height, not separate cliff props, so collision and visuals stay aligned.
 
 ## Naming
 
@@ -84,8 +145,12 @@ Current biome examples live in:
 
 ```text
 assets/textures/terrain/shephelah_mediterranean/
+assets/textures/terrain/coastal_plain/
 assets/textures/terrain/central_highlands/
 assets/textures/terrain/galilee_northern_hills/
+assets/textures/terrain/jordan_rift/
+assets/textures/terrain/transjordan_plateau/
+assets/textures/terrain/negev_arabah_wilderness/
 ```
 
 ## Create Height Maps
@@ -155,6 +220,7 @@ Tune nearby shader/profile values:
 - `spot_edge_raggedness`, `spot_breakup_strength`, `spot_grain_strength`, `spot_core_strength`
 - `rock_count`, `rock_scale`, `rock_color`, `rock_texture_tile`
 - macro terrain values like `terrain_height_scale`, `terrain_ridge_strength`, `terrain_wadi_strength`
+- Negev-style vertical relief values like `terrain_vertical_relief_strength`, `terrain_vertical_basin_drop`, `terrain_vertical_rim_height`, and `terrain_vertical_wadi_depth`
 
 Avoid adding large procedural ledges or walls until the gameplay/art direction asks for them. They can overpower the terrain fast.
 

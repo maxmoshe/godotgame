@@ -38,6 +38,7 @@ func _ready() -> void:
 			failures.append("%s returned missing profile id %d" % [String(sample_dict["name"]), actual_id])
 		_validate_profile_textures(profile, failures)
 
+	_validate_game_state_combat_map_context(failures)
 	campaign_map.free()
 
 	if failures.is_empty():
@@ -64,3 +65,26 @@ func _validate_profile_textures(profile: Dictionary, failures: Array[String]) ->
 			continue
 		if not FileAccess.file_exists(path):
 			failures.append("Profile %d missing optional %s: %s" % [int(profile.get("biome_id", 0)), key, path])
+
+
+func _validate_game_state_combat_map_context(failures: Array[String]) -> void:
+	GameState.clear_combat_context()
+	GameState.clear_combat_map_context()
+	if GameState.has_combat_map_context():
+		failures.append("GameState reports combat map context after clear.")
+
+	GameState.set_combat_map_context({
+		"campaign_position": Vector2(12.0, 34.0),
+		"biome_id": 5,
+		"biome_key": "biome_jordan_rift",
+		"biome_name": "Jordan Rift",
+		"biome_properties": {}
+	})
+	GameState.clear_combat_context()
+	if not GameState.has_combat_map_context():
+		failures.append("GameState lost combat map context after clearing combat context.")
+
+	var stored_context := GameState.get_combat_map_context()
+	if int(stored_context.get("biome_id", 0)) != 5:
+		failures.append("GameState combat map context expected biome 5, got %d." % int(stored_context.get("biome_id", 0)))
+	GameState.clear_combat_map_context()
